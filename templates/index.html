@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+  <head>
+
+  <title>FastAPI HTML Test</title>
+  </head>
+
+  
+  <body>
+
+  <form action="/" method="post" enctype="multipart/form-data">
+    <label for="file">Upload Vide:</label>
+    <input type="file" name="file" id="file" accept="video/*" required>
+    <button type="submit">Upload and Transcribe</button>
+  </form>
+
+  <form action="/" method="post">
+    <input type="text" name="url" placeholder="Enter Tiktok Link">
+    <button type="submit">Submit URL</button>
+  </form>
+
+  {% if transcript %}
+  <h3>Transcript:</h3>
+  <p>{{transcript}}</p>
+  {% endif %}
+
+  <p>Count: {{ count }}</p>
+  </body>
+</html>
