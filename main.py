@@ -52,8 +52,8 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 app = FastAPI()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 templates = Jinja2Templates(directory="templates")
-
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
@@ -116,7 +116,9 @@ async def handle_submission(
             "transcript": transcript,
             "count": 5,
             "submitted_url": url,
-            "uploaded_file": file.filename if file else None
+            "uploaded_file": file.filename if file else None,
+            "audio_file": audio_filename
+            
         }
     )
 
