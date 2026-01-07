@@ -17,7 +17,7 @@ Optional support for direct video URLs
 
 Installation:
 Clone the repository:
-git clone https://github.com/yourusername/video-transcription-mvp.git
+git clone https://github.com/Kywll/Tiktok-Transcript.git
 cd video-transcription-mvp
 
 Create and activate a virtual environment:
