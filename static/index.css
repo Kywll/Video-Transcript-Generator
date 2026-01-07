@@ -1,0 +1,15 @@
+  .word {
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+  }
+
+  .word:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+    transform: scale(1.05);
+  }
+
+  .word:active {
+    background-color: rgba(255, 255, 255, 0.4);
+  }
