@@ -55,10 +55,12 @@
         <form action="">
           <input type="text" id="word_search" placeholder="Enter Word">
           <button type="button" onclick="highlightWords()">Search Word</button>
+          <p id="word-count">Word Count: </p>
         </form>
       </div>
 
       <script>
+        const wordCount = document.getElementById("word-count")
         const audio = document.getElementById("player")
         const transcript = {{ transcript | tojson }};
         const word_indexes = {{ word_indexes | default({}) | tojson}};
@@ -77,6 +79,7 @@
         let highlightedIndexes = []
         function highlightWords(){
           const wordInput = document.getElementById("word_search").value.toLowerCase().trim();
+          wordCount.innerText = "Word Count: 0"
 
           highlightedIndexes.forEach(idx => {
               const span = document.querySelector(`#transcript span.word[data-index="${idx}"]`);
@@ -94,10 +97,13 @@
                 span.style.backgroundColor = "yellow";
                 highlightedIndexes.push(idx)
               }
+
             });
+            wordCount.innerText = "Word Count: " + indexes.length
+
           }
           else{
-            console.log("Word not found")
+            wordCount.innerText = "Word not found"
           }
         }
 
