@@ -54,8 +54,21 @@
       <div class="text-center text-white">
         <form action="">
           <input type="text" id="word_search" placeholder="Enter Word">
-          <button type="button" onclick="highlightWords()">Search Word</button>
+          <button type="button" onclick="highlightWords()">Search Word</button><br>
+          <button type="button">Mute Words</button>
+          <button type="button">Trim Words</button>
+          <button type="button">Add Sound Effects on Word</button>
           <p id="word-count">Word Count: </p>
+        </form>
+      </div>
+
+      <div class="text-center text-white">
+          <p id="word-freq"></p>
+      </div>
+
+      <div class="text-center text-white">
+        <form action="">
+          <button type="button">Export Video</button>
         </form>
       </div>
 
@@ -64,6 +77,12 @@
         const audio = document.getElementById("player")
         const transcript = {{ transcript | tojson }};
         const word_indexes = {{ word_indexes | default({}) | tojson}};
+        const word_frequencies = {{ word_frequencies | default({}) | tojson}};
+
+        if(word_frequencies){
+            const wordFreq = document.getElementById("word-freq")
+            wordFreq.innerText = word_frequencies
+        }
 
         document.getElementById("transcript").addEventListener("click", (e) => {
           if (!e.target.classList.contains("word")) return;
