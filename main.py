@@ -140,6 +140,12 @@ python -m uvicorn main:app --reload
 
 http://127.0.0.1:8000
 
+Open a SECOND terminal
+cd frontend
+
+npm run dev
+http://localhost:5173/
+
 Ctrl + Shift + P
 Python: Select Interpreter
 
