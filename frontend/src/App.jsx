@@ -8,9 +8,11 @@ import Transcript from "./components/Transcript";
 function App() {
   const [file, setFile] = useState(null);
   const [transcript, setTranscript] = useState(null);
+  const [wordIndexes, setWordIndexes] = useState(null);
   const [audioFile, setAudioFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [currentTime, setCurrentTime] = useState(0);
 
   const audioRef = useRef(null);
 
@@ -24,6 +26,7 @@ function App() {
     try {
       const data = await transcribeVideo(file);
       setTranscript(data.transcript);
+      setWordIndexes(data.word_indexes);
       setAudioFile(
         `http://127.0.0.1:8000/uploads/${data.audio_file}`
       );
@@ -37,7 +40,7 @@ function App() {
   const jumpTo = (time) => {
     if (audioRef.current) {
       audioRef.current.currentTime = time;
-      audio.current.play();
+      audioRef.current.play();
     }
   };
 
@@ -54,9 +57,19 @@ function App() {
 
       {error && <p style={{ color: "red" }}>{error}</p>}
 
-      <AudioPlayer ref={audioRef} src={audioFile} />
+      <AudioPlayer 
+        ref={audioRef} 
+        controls
+        src={audioFile} 
+        onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
+      />
 
-      <Transcript transcript={transcript} onWordClick={jumpTo} />
+      <Transcript 
+        transcript={transcript}
+        onWordClick={jumpTo} 
+        currentTime={currentTime}
+      />
+
     </div>
   );
 }
