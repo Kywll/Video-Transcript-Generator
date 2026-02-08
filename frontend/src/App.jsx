@@ -62,7 +62,40 @@ function App() {
 
   }, [currentTime, mutedIndexes, transcript]);
 
+  const handleExportVideo = async () => {
+    if (!transcript || !file) return;
 
+    setLoading(true);
+
+    const mutes = mutedIndexes.map(idx => ({
+      start: transcript[idx].start,
+      end: transcript[idx].end
+    }));
+
+    try {
+      const res = await fetch("http://127.0.0.1:8000/export-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json"},
+        body: JSON.stringify({
+          filename: file.name,
+          mutes: mutes
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.filename) {
+        window.location.href = `http://127.0.0.1:8000/download/${data.filename}`;
+      } else {
+        throw new Error("No filename received from server")
+      }
+
+    } catch (err) {
+      setError("Export failed: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
 
   return (
@@ -93,7 +126,15 @@ function App() {
         onToggleMute={toggleMute}
       />
 
-
+      {transcript && (
+        <button
+          onClick={handleExportVideo}
+          disabled={loading}
+          style={{ marginLeft: "10px", backgroundColor: "green", color: "white" }}
+        >
+          {loading ? "Processing..." : "Export Edited Video"}
+        </button>
+      )}
 
     </div>
   );

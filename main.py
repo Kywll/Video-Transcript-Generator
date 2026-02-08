@@ -1,18 +1,22 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from vosk import Model, KaldiRecognizer
 from pydub import AudioSegment
 
 import shutil, os, subprocess, wave
 import json
 import heapq 
+import re
 
 model = Model("model")
 
 UPLOAD_DIR = "uploads"
+DOWNLOAD_DIR = "downloads"
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 app = FastAPI()
 
@@ -25,6 +29,7 @@ app.add_middleware(
 )
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 
 @app.post("/transcribe")
 async def transcribe_video(file: UploadFile = File(...)):
@@ -73,6 +78,55 @@ async def transcribe_video(file: UploadFile = File(...)):
         
     }
 
+@app.post("/export-video")
+async def export_video(payload: dict = Body(...)):
+    filename = payload.get("filename")
+    mutes = payload.get("mutes")
+
+    safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', filename)
+
+    video_path = os.path.join(UPLOAD_DIR, filename)
+    output_filename = f"edited_{safe_filename}"
+    output_path = os.path.join(DOWNLOAD_DIR, output_filename)
+
+    apply_mute_edits(video_path, output_path, mutes)
+
+    return {"filename": output_filename}
+
+@app.get("/download/{filename}")
+async def download_file(filename: str):
+    file_path = os.path.join(DOWNLOAD_DIR, filename)
+    if os.path.exists(file_path):
+        return FileResponse(
+            path=file_path,
+            filename=filename,
+            media_type='application/octet-stream'
+        )
+    raise HTTPException(status_code=404, detail="File not found")
+
+def apply_mute_edits(input_path, output_path, mutes):
+    if not mutes:
+        shutil.copy(input_path, output_path)
+    else:
+        filter_parts = []
+        for m in mutes:
+            s = max(0, m['start'] - 0.1)
+            e = max(0, m['end'] - 0.1)
+            filter_parts.append(f"volume=enable='between(t,{s},{e})':volume=0")
+        
+        audio_filter = ",".join(filter_parts)
+
+        command = [
+            "ffmpeg", "-y",
+            "-i", input_path,
+            "-af", audio_filter,
+            "-c:v", "copy",
+            "-c:a", "aac",
+            output_path
+        ]
+
+        subprocess.run(command, check=True)
+
 def extract_audio(video_path, output_path):
     command = [
         "ffmpeg",
@@ -83,6 +137,7 @@ def extract_audio(video_path, output_path):
         "-af", "afftdn",
         output_path
     ]
+    
     subprocess.run(
         command, 
         stdout=subprocess.PIPE, 
