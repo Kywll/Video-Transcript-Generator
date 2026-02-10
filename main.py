@@ -24,7 +24,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
-        "https://video-trascript-generator.vercel.app/"
+        "https://video-transcript-generator.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -44,7 +44,7 @@ async def transcribe_video(file: UploadFile = File(...)):
     audio_path = os.path.join(UPLOAD_DIR, audio_filename)
     extract_audio(video_path, audio_path)
 
-    chunks = split_audio(audio_path, chunk_ms=30000)
+    chunks = split_audio(audio_path, chunk_ms=10000)
 
     transcript = []
     offset = 0.0
