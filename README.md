@@ -1,4 +1,5 @@
 Video Transcription MVP
+
 A full-stack video transcription and editing tool built using Python, FastAPI, Vosk, FFmpeg, and React (Vite).
 
 This project extracts audio from uploaded videos, transcribes each word with timestamps, and provides an interactive interface to navigate, search, mute, and export edited videos.
