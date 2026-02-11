@@ -56,17 +56,24 @@ function Transcript({ transcript, onWordClick, currentTime, mutedIndexes, onTogg
                     return (
                         <span
                             onClick={(e) => {
-                                if (!e.altKey) {
-                                    onWordClick(w.start);
+                                if (e.altKey) {
+                                onToggleMute(i);
+                                } else if (!holdTimeout.current) {
+                                onWordClick(w.start);
                                 }
                             }}
                             onTouchStart={() => {
                                 holdTimeout.current = setTimeout(() => {
-                                    onToggleMute(i);
+                                onToggleMute(i);
+                                holdTimeout.current = "muted"; // mark as long press
                                 }, 500);
                             }}
                             onTouchEnd={() => {
+                                if (holdTimeout.current && holdTimeout.current !== "muted") {
                                 clearTimeout(holdTimeout.current);
+                                onWordClick(w.start); // short tap
+                                }
+                                holdTimeout.current = null;
                             }}
                             key={i}
                             onMouseEnter={() => setHoveredIndex(i)}
