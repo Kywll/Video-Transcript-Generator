@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
+
 
 function Transcript({ transcript, onWordClick, currentTime, mutedIndexes, onToggleMute }) {
     const [searchWord, setSearchWord] = useState("");
