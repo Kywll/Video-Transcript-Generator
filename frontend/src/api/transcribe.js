@@ -16,3 +16,22 @@ export async function transcribeVideo(file) {
 
     return res.json();
 }
+
+export async function transcribeUrl(url) {
+    const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/transcribe-url`,
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ url }),
+        }
+    );
+
+    if (!res.ok) {
+        throw new Error("URL transcription failed");
+    }
+
+    return res.json();
+}

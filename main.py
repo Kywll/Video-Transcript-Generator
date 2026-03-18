@@ -36,6 +36,49 @@ app.add_middleware(
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 
+def download_tiktok(url):
+    unique_id = str(uuid.uuid4())
+
+    output_template = f"{UPLOAD_DIR}/{unique_id}.%(ext)s"
+
+    ydl_opts = {
+        "outtmpl": output_template,
+        "format": "bestvideo+bestaudio/best",
+        "merge_output_format": "mp4",
+        "noplaylist": True
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.extract_info(url, download=True)
+
+    return f"{UPLOAD_DIR}/{unique_id}.mp4"
+
+@app.post("/transcribe-url")
+async def transcribe_tiktok(payload: dict = Body(...)):
+
+    url = payload.get("url")
+
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+
+    try:
+        video_path = download_tiktok(url)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    filename = os.path.basename(video_path)
+
+    transcript, word_indexes, word_frequencies, audio_filename = process_video(video_path, filename)
+
+    return {
+        "audio_file": audio_filename,
+        "video_file": filename,
+        "transcript": transcript,
+        "word_indexes": word_indexes,
+        "word_frequencies": word_frequencies
+    }
+
 @app.post("/transcribe")
 async def transcribe_video(file: UploadFile = File(...)):
     video_path = os.path.join(UPLOAD_DIR, file.filename)

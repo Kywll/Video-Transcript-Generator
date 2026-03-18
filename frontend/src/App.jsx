@@ -1,16 +1,18 @@
 import { useState, useRef, useEffect } from "react";
 import { transcribeVideo } from "./api/transcribe";
+import { transcribeUrl } from "./api/transcribe";
 
 import FileUpload from "./components/FileUpload";
 import AudioPlayer from "./components/AudioPlayer";
 import Transcript from "./components/Transcript";
+import UrlInput from "./components/InputUrl";
 
 function App() {
   const [file, setFile] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [transcript, setTranscript] = useState(null);
   const [wordIndexes, setWordIndexes] = useState(null);
   const [audioFile, setAudioFile] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [mutedIndexes, setMutedIndexes] = useState([]);
@@ -36,6 +38,33 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleUrlTranscribe = async (url) => {
+      if (!url.includes("tiktok.com")) {
+          alert("Please enter a valid TikTok URL");
+          return;
+      }
+
+      try {
+          setLoading(true);
+          setError(null);
+
+          const data = await transcribeUrl(url);
+
+          console.log("URL DATA:", data);
+
+          setTranscript(data.transcript);
+          setWordIndexes(data.word_indexes);
+
+          setAudioFile(`${import.meta.env.VITE_API_URL}/uploads/${data.audio_file}`);
+
+      } catch (err) {
+          console.error(err);
+          alert("URL transcription failed");
+      } finally {
+          setLoading(false);
+      }
   };
 
   const jumpTo = (time) => {
@@ -133,6 +162,11 @@ function App() {
               )}
             </div>
           </div>
+          
+          <UrlInput
+            onSubmit={handleUrlTranscribe}
+            loading={loading}
+          />
 
           <AudioPlayer
             ref={audioRef}
