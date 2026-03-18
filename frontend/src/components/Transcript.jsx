@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 
 
-function Transcript({ transcript, onWordClick, currentTime, mutedIndexes, onToggleMute }) {
+function Transcript({ transcript, onWordClick, currentTime, mutedIndexes, onToggleMute, muteMode }) {
     const [searchWord, setSearchWord] = useState("");
     const [hoveredIndex, setHoveredIndex] = useState(null);
 
@@ -58,7 +58,7 @@ function Transcript({ transcript, onWordClick, currentTime, mutedIndexes, onTogg
                     return (
                         <span
                             onClick={(e) => {
-                                if (e.altKey) {
+                                if (e.altKey || muteMode) {
                                 onToggleMute(i);
                                 } else if (!holdTimeout.current) {
                                 onWordClick(w.start);

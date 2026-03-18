@@ -16,6 +16,7 @@ function App() {
   const [error, setError] = useState(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [mutedIndexes, setMutedIndexes] = useState([]);
+  const [muteMode, setMuteMode] = useState(false);
 
   const audioRef = useRef(null);
 
@@ -174,26 +175,50 @@ function App() {
             onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
           />
 
-          <Transcript
-            transcript={transcript}
-            onWordClick={jumpTo}
-            currentTime={currentTime}
-            mutedIndexes={mutedIndexes}
-            onToggleMute={toggleMute}
-          />
-
           {transcript && (
-            <div className="text-center mt-4">
-              <button
-                className="btn btn-success px-4"
-                onClick={handleExportVideo}
-                disabled={loading}
-              >
-                {loading ? "Processing..." : "Export Edited Video"}
-              </button>
-            </div>
+            <>
+              {/* MUTE MODE BUTTON */}
+              <div className="text-center mt-3">
+                <button
+                  className={`btn ${
+                    muteMode ? "btn-danger" : "btn-outline-danger"
+                  } px-4`}
+                  onClick={() => setMuteMode((prev) => !prev)}
+                >
+                  {muteMode
+                    ? "Mute Mode ON (Click words to mute)"
+                    : "Mute Mode OFF"}
+                </button>
+
+                <p className="small mt-2">
+                  {muteMode
+                    ? "Click words to mute/unmute"
+                    : "Click words to jump"}
+                </p>
+              </div>
+
+              <Transcript
+                transcript={transcript}
+                onWordClick={jumpTo}
+                currentTime={currentTime}
+                mutedIndexes={mutedIndexes}
+                onToggleMute={toggleMute}
+                muteMode={muteMode}
+              />
+
+              <div className="text-center mt-4">
+                <button
+                  className="btn btn-success px-4"
+                  onClick={handleExportVideo}
+                  disabled={loading}
+                >
+                  {loading ? "Processing..." : "Export Edited Video"}
+                </button>
+              </div>
+            </>
           )}
 
+          {error && <div className="alert alert-danger mt-3">{error}</div>}
         </div>
       </div>
     </div>
