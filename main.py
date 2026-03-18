@@ -9,6 +9,8 @@ import shutil, os, subprocess, wave
 import json
 import heapq 
 import re
+import yt_dlp
+import uuid
 
 model = Model("model")
 
@@ -40,38 +42,8 @@ async def transcribe_video(file: UploadFile = File(...)):
     with open(video_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    audio_filename = os.path.splitext(file.filename)[0] + ".wav"
-    audio_path = os.path.join(UPLOAD_DIR, audio_filename)
-    extract_audio(video_path, audio_path)
-
-    chunks = split_audio(audio_path, chunk_ms=10000)
-
-    transcript = []
-    offset = 0.0
-
-    for chunk_path in chunks:
-        for w in transcribe_vosk(chunk_path):
-            w["start"] += offset
-            w["end"] += offset
-            transcript.append(w)
-        
-        offset += 10.0
-
-    word_indexes = {}
-    for idx, word_obj in enumerate(transcript):
-        w = word_obj["word"].lower().strip(".,!?'")
-        if w not in word_indexes:
-            word_indexes[w] = []
-        word_indexes[w].append(idx)
-
-    freq = []
-    for w in word_indexes:
-        pair = (-len(word_indexes[w]), w)
-        heapq.heappush(freq, pair)
     
-    word_frequencies = []
-    for i in range(10):
-        word_frequencies.append(heapq.heappop(freq))
+    transcript, word_indexes, word_frequencies, audio_filename = process_video(video_path, file.filename)
 
     return {
         "audio_file": audio_filename,
@@ -106,6 +78,44 @@ async def download_file(filename: str):
             media_type='application/octet-stream'
         )
     raise HTTPException(status_code=404, detail="File not found")
+
+def process_video(video_path, filename):
+
+
+    audio_filename = os.path.splitext(filename)[0] + ".wav"
+    audio_path = os.path.join(UPLOAD_DIR, audio_filename)
+    extract_audio(video_path, audio_path)
+
+    chunks = split_audio(audio_path, chunk_ms=10000)
+
+    transcript = []
+    offset = 0.0
+
+    for chunk_path in chunks:
+        for w in transcribe_vosk(chunk_path):
+            w["start"] += offset
+            w["end"] += offset
+            transcript.append(w)
+        
+        offset += 10.0
+
+    word_indexes = {}
+    for idx, word_obj in enumerate(transcript):
+        w = word_obj["word"].lower().strip(".,!?'")
+        if w not in word_indexes:
+            word_indexes[w] = []
+        word_indexes[w].append(idx)
+
+    freq = []
+    for w in word_indexes:
+        pair = (-len(word_indexes[w]), w)
+        heapq.heappush(freq, pair)
+    
+    word_frequencies = []
+    for i in range(10):
+        word_frequencies.append(heapq.heappop(freq))
+
+    return transcript, word_indexes, word_frequencies, audio_filename
 
 def apply_mute_edits(input_path, output_path, mutes):
     if not mutes:
