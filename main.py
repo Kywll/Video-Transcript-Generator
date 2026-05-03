@@ -14,6 +14,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
 
 import shutil, os, subprocess
+import threading
+import time
 import json
 import heapq 
 import re
@@ -71,6 +73,13 @@ app.add_middleware(
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
+
+def delete_later(path, delay=900):  # 15 minutes
+    def _delete():
+        time.sleep(delay)
+        if os.path.exists(path):
+            os.remove(path)
+    threading.Thread(target=_delete, daemon=True).start()
 
 def download_tiktok(url):
     unique_id = str(uuid.uuid4())
@@ -137,11 +146,11 @@ async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
         }
 
     finally:
-        if os.path.exists(video_path):
-            os.remove(video_path)
+        if video_path:
+            delete_later(video_path)
 
-        if audio_path and os.path.exists(audio_path):
-            os.remove(audio_path)
+        if audio_path:
+            delete_later(audio_path)
 
 @app.post("/transcribe")
 @limiter.limit("5/minute")
@@ -173,11 +182,11 @@ async def transcribe_video(
         }
     
     finally:
-        if os.path.exists(video_path):
-            os.remove(video_path)
+        if video_path:
+            delete_later(video_path)
 
-        if audio_path and os.path.exists(audio_path):
-            os.remove(audio_path)
+        if audio_path:
+            delete_later(audio_path)
 
 @app.post("/export-video")
 async def export_video(payload: dict = Body(...)):

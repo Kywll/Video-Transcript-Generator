@@ -238,19 +238,22 @@ function App() {
             </>
           )}
             {transcript && (
-              <button
-              className="text-center btn btn-secondary mt-3"
-              onClick={() => {
-                setTranscript(null);
-                setFile(null);
-                setAudioFile(null);
-                setError(null);
-                setWordIndexes(null);
-                setMutedIndexes([]);
-              }}
-            >
-              New Transcription
-            </button>
+              <div className="text-center mt-3">
+                <button
+                className="btn btn-secondary mt-3"
+                onClick={() => {
+                  setTranscript(null);
+                  setFile(null);
+                  setAudioFile(null);
+                  setError(null);
+                  setWordIndexes(null);
+                  setMutedIndexes([]);
+                  
+                }}
+              >
+                New Transcription
+              </button>
+            </div>
             )}
 
           {error && <div className="alert alert-danger mt-3">{error}</div>}
