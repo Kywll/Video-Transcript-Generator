@@ -441,7 +441,7 @@ def extract_audio(video_path, output_path):
         "-i", video_path,
         "-ar", "16000",
         "-ac", "1",
-        "-af", "highpass=f=200,lowpass=f=3000",
+        #"-af", "highpass=f=200,lowpass=f=3000",
         #"-af", "afftdn",
         output_path
     ]
@@ -458,7 +458,7 @@ def transcribe_deepgram(wav_path, api_key=None):
         "https://api.deepgram.com/v1/listen?"
         "model=nova-2"
         "&smart_format=true"
-        "&language=en"
+        "&language=multi"
         "&keywords=tiktok:3"
         "&keywords=facebook:3"
         "&keywords=instagram:3"
