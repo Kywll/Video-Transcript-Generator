@@ -13,6 +13,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
 
+from difflib import get_close_matches
+
 import shutil, os, subprocess
 import threading
 import time
@@ -21,6 +23,32 @@ import heapq
 import re
 import yt_dlp
 import uuid
+
+TARGET_WORDS = [
+    "tiktok", "facebook", "instagram", "messenger",
+    "telegram", "whatsapp", "viber", "shopee", "lazada"
+]
+
+PHONETIC_MAP = {
+    "ticktock": "tiktok",
+    "ticktok": "tiktok",
+    "tik tok": "tiktok",
+    "face book": "facebook",
+    "insta gram": "instagram",
+    "whats up": "whatsapp",
+    "what's up": "whatsapp"
+}
+
+def normalize_word(word):
+    clean = word.lower().strip(".,!?'")
+
+    # direct phonetic mapping first
+    if clean in PHONETIC_MAP:
+        return PHONETIC_MAP[clean]
+
+    # fuzzy match fallback
+    match = get_close_matches(clean, TARGET_WORDS, n=1, cutoff=0.7)
+    return match[0] if match else clean
 
 MAX_DURATION = 120
 
@@ -159,7 +187,9 @@ async def transcribe_video(
     file: UploadFile = File(...),
     api_key: str = Form(None)
 ):
-    safe_name = os.path.basename(file.filename)
+    unique_id = str(uuid.uuid4())
+    ext = os.path.splitext(file.filename)[1]
+    safe_name = f"{unique_id}{ext}"
     video_path = os.path.join(UPLOAD_DIR, safe_name)
 
     with open(video_path, "wb") as f:
@@ -200,7 +230,7 @@ async def export_video(payload: dict = Body(...)):
     if mutes and not isinstance(mutes, list):
         raise HTTPException(status_code=400, detail="Invalid mutes format")
 
-    safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', filename)
+    safe_filename = os.path.basename(filename)
 
     safe_input = os.path.basename(filename)
     video_path = os.path.join(UPLOAD_DIR, safe_input)
@@ -219,12 +249,14 @@ async def export_video(payload: dict = Body(...)):
 async def download_file(filename: str):
     safe_name = os.path.basename(filename)
     file_path = os.path.join(DOWNLOAD_DIR, safe_name)
+
     if os.path.exists(file_path):
         return FileResponse(
             path=file_path,
             filename=safe_name,
             media_type='application/octet-stream'
         )
+
     raise HTTPException(status_code=404, detail="File not found")
 
 def process_video(video_path, filename, user_api_key=None):
@@ -236,7 +268,7 @@ def process_video(video_path, filename, user_api_key=None):
             detail=f"Video too long ({int(duration)}s). Max allowed is {MAX_DURATION}s"
         )
 
-    audio_filename = os.path.splitext(filename)[0] + ".wav"
+    audio_filename = f"{uuid.uuid4()}.wav"
     audio_path = os.path.join(UPLOAD_DIR, audio_filename)
     extract_audio(video_path, audio_path)
 
@@ -250,11 +282,38 @@ def process_video(video_path, filename, user_api_key=None):
     
 
     word_indexes = {}
-    for idx, word_obj in enumerate(transcript):
-        w = word_obj["word"].lower().strip(".,!?'")
-        if w not in word_indexes:
-            word_indexes[w] = []
-        word_indexes[w].append(idx)
+
+    i = 0
+    while i < len(transcript):
+        word_obj = transcript[i]
+        current = word_obj["word"].lower().strip(".,!?'")
+
+        # try combining with next word
+        if i < len(transcript) - 1:
+            next_word = transcript[i + 1]["word"].lower().strip(".,!?'")
+            combined = f"{current} {next_word}"
+
+            # check phonetic combined
+            if combined in PHONETIC_MAP:
+                normalized = PHONETIC_MAP[combined]
+
+                if normalized not in word_indexes:
+                    word_indexes[normalized] = []
+
+                word_indexes[normalized].append(i)
+
+                i += 2
+                continue
+
+        # normal single word
+        normalized = normalize_word(current)
+
+        if normalized not in word_indexes:
+            word_indexes[normalized] = []
+
+        word_indexes[normalized].append(i)
+
+        i += 1
 
     freq = []
     for w in word_indexes:
@@ -297,6 +356,7 @@ def extract_audio(video_path, output_path):
         "-i", video_path,
         "-ar", "16000",
         "-ac", "1",
+        "-af", "highpass=f=200,lowpass=f=3000",
         #"-af", "afftdn",
         output_path
     ]
@@ -309,7 +369,21 @@ def extract_audio(video_path, output_path):
         )
 
 def transcribe_deepgram(wav_path, api_key=None):
-    url = "https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true"
+    url = (
+        "https://api.deepgram.com/v1/listen?"
+        "model=nova-2"
+        "&smart_format=true"
+        "&language=en"
+        "&keywords=tiktok:3"
+        "&keywords=facebook:3"
+        "&keywords=instagram:3"
+        "&keywords=messenger:3"
+        "&keywords=telegram:3"
+        "&keywords=whatsapp:3"
+        "&keywords=viber:3"
+        "&keywords=shopee:3"
+        "&keywords=lazada:3"
+        )
     key_to_use = api_key or DEEPGRAM_API_KEY
     headers = {
         "Authorization": f"Token {key_to_use}",

@@ -27,6 +27,7 @@ function App() {
     setLoading(true);
     setError(null);
     setTranscript(null);
+    setAudioFile(null);
 
     try {
       const data = await transcribeVideo(file, apiKey);
@@ -55,6 +56,7 @@ function App() {
           setLoading(true);
           setError(null);
           setTranscript(null);
+          setAudioFile(null);
 
           const data = await transcribeUrl(url, apiKey);
 
@@ -190,6 +192,7 @@ function App() {
           />
 
           <AudioPlayer
+            key={audioFile}
             ref={audioRef}
             src={audioFile}
             onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
