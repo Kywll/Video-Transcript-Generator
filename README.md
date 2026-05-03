@@ -27,7 +27,7 @@ https://github.com/Kywll/Video-Transcript-Generator
 
 Current Features:
 
-Extract audio from videos automatically using FFmpeg
+Extract audio from videos through uploads or tiktok urls automatically using FFmpeg
 
 Noise reduction and audio normalization
 
