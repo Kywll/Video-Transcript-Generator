@@ -23,6 +23,7 @@ import heapq
 import re
 import yt_dlp
 import uuid
+import queue
 
 TARGET_WORDS = [
     "tiktok", "facebook", "instagram", "messenger",
@@ -69,6 +70,36 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 app = FastAPI()
+
+JOB_QUEUE = queue.Queue()
+JOB_RESULTS = {}  # job_id -> {status, result?, error?}
+
+NUM_WORKERS = 2  # adjust (2–3 for small server)
+
+def worker():
+    while True:
+        job_id, func, args = JOB_QUEUE.get()
+        try:
+            job = JOB_RESULTS.get(job_id)
+            if job:
+                job["status"] = "processing"
+            result = func(*args)
+            job = JOB_RESULTS.get(job_id)
+            if job:
+                job["status"] = "done"
+                job["result"] = result
+        except Exception as e:
+            print(f"[JOB ERROR] {job_id}: {e}")
+            job = JOB_RESULTS.get(job_id)
+            if job:
+                job["status"] = "failed"
+                job["error"] = str(e)
+        finally:
+            JOB_QUEUE.task_done()
+
+# start workers
+for _ in range(NUM_WORKERS):
+    threading.Thread(target=worker, daemon=True).start()
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request, exc):
@@ -121,7 +152,7 @@ def download_tiktok(url):
         "noplaylist": True
     }
 
-    with yt_dlp.YoutubeDL({"quiet": True}) as ydl:
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
 
     duration = info.get("duration")
@@ -138,10 +169,33 @@ def download_tiktok(url):
 
     return filename
 
+def cleanup_jobs():
+    while True:
+        time.sleep(1800)  # 30 minutes
+        keys_to_delete = []
+
+        for job_id, job in list(JOB_RESULTS.items()):
+            if job.get("status") in ["done", "failed"] and "result" in job:
+                keys_to_delete.append(job_id)
+
+        for k in keys_to_delete:
+            JOB_RESULTS.pop(k, None)
+
+# start cleanup thread
+threading.Thread(target=cleanup_jobs, daemon=True).start()
+
+@app.get("/job/{job_id}")
+async def get_job(job_id: str):
+    job = JOB_RESULTS.get(job_id)
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return job
+
 @app.post("/transcribe-url")
 @limiter.limit("5/minute")
 async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
-
     url = payload.get("url")
     user_api_key = payload.get("api_key")
 
@@ -156,29 +210,39 @@ async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
     filename = os.path.basename(video_path)
-    
-    audio_path = None
 
-    try:
-        transcript, word_indexes, word_frequencies, audio_filename = process_video(
-            video_path, filename, user_api_key
-        )
-        audio_path = os.path.join(UPLOAD_DIR, audio_filename)
+    job_id = str(uuid.uuid4())
+    JOB_RESULTS[job_id] = {"status": "queued"}
 
-        return {
-            "audio_file": audio_filename,
-            "video_file": filename,
-            "transcript": transcript,
-            "word_indexes": word_indexes,
-            "word_frequencies": word_frequencies
-        }
+    def job():
+        audio_path = None
 
-    finally:
-        if video_path:
-            delete_later(video_path)
+        try:
+            transcript, word_indexes, word_frequencies, audio_filename = process_video(
+                video_path, filename, user_api_key
+            )
 
-        if audio_path:
-            delete_later(audio_path)
+            audio_path = os.path.join(UPLOAD_DIR, audio_filename)
+
+            return {
+                "audio_file": audio_filename,
+                "video_file": filename,
+                "transcript": transcript,
+                "word_indexes": word_indexes,
+                "word_frequencies": word_frequencies
+            }
+
+        finally:
+            # cleanup AFTER processing (safe)
+            if video_path and os.path.exists(video_path):
+                delete_later(video_path)
+
+            if audio_path and os.path.exists(audio_path):
+                delete_later(audio_path, delay=1800)  # 30 mins
+
+    JOB_QUEUE.put((job_id, job, ()))
+
+    return {"job_id": job_id}
 
 @app.post("/transcribe")
 @limiter.limit("5/minute")
@@ -192,31 +256,48 @@ async def transcribe_video(
     safe_name = f"{unique_id}{ext}"
     video_path = os.path.join(UPLOAD_DIR, safe_name)
 
+    file.file.seek(0, os.SEEK_END)
+    size = file.file.tell()
+    file.file.seek(0)
+
+    if size > 100 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large")
+    
     with open(video_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    audio_path = None
+    job_id = str(uuid.uuid4())
+    JOB_RESULTS[job_id] = {"status": "queued"}
 
-    try:
-        transcript, word_indexes, word_frequencies, audio_filename = process_video(
-            video_path, safe_name, api_key
-        )
-        audio_path = os.path.join(UPLOAD_DIR, audio_filename)
+    def job():
+        audio_path = None
 
-        return {
-            "audio_file": audio_filename,
-            "video_file": safe_name,
-            "transcript": transcript,
-            "word_indexes": word_indexes,
-            "word_frequencies": word_frequencies
-        }
-    
-    finally:
-        if video_path:
-            delete_later(video_path)
+        try:
+            transcript, word_indexes, word_frequencies, audio_filename = process_video(
+                video_path, safe_name, api_key
+            )
 
-        if audio_path:
-            delete_later(audio_path)
+            audio_path = os.path.join(UPLOAD_DIR, audio_filename)
+
+            return {
+                "audio_file": audio_filename,
+                "video_file": safe_name,
+                "transcript": transcript,
+                "word_indexes": word_indexes,
+                "word_frequencies": word_frequencies
+            }
+
+        finally:
+            # cleanup AFTER processing
+            if video_path and os.path.exists(video_path):
+                delete_later(video_path)
+
+            if audio_path and os.path.exists(audio_path):
+                delete_later(audio_path, delay=1800)  # 30 mins
+
+    JOB_QUEUE.put((job_id, job, ()))
+
+    return {"job_id": job_id}
 
 @app.post("/export-video")
 async def export_video(payload: dict = Body(...)):
@@ -347,7 +428,11 @@ def apply_mute_edits(input_path, output_path, mutes):
             output_path
         ]
 
-        subprocess.run(command, check=True)
+        result = subprocess.run(command, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            print(result.stderr)
+            raise HTTPException(status_code=500, detail="Video export failed")
 
 def extract_audio(video_path, output_path):
     command = [
@@ -391,7 +476,7 @@ def transcribe_deepgram(wav_path, api_key=None):
     }
 
     with open(wav_path, "rb") as f:
-        response = requests.post(url, headers=headers, data=f)
+        response = requests.post(url, headers=headers, data=f, timeout=30)
         #print(response.status_code)
         #print(response.text)
 
