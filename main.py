@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Body, HTTPException
+from fastapi import FastAPI, UploadFile, File, Body, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -103,7 +103,7 @@ def download_tiktok(url):
 
 @app.post("/transcribe-url")
 @limiter.limit("5/minute")
-async def transcribe_tiktok(payload: dict = Body(...)):
+async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
 
     url = payload.get("url")
     user_api_key = payload.get("api_key")
@@ -145,7 +145,11 @@ async def transcribe_tiktok(payload: dict = Body(...)):
 
 @app.post("/transcribe")
 @limiter.limit("5/minute")
-async def transcribe_video(file: UploadFile = File(...), api_key: str = Form(None)):
+async def transcribe_video(
+    request: Request,
+    file: UploadFile = File(...),
+    api_key: str = Form(None)
+):
     safe_name = os.path.basename(file.filename)
     video_path = os.path.join(UPLOAD_DIR, safe_name)
 
@@ -294,8 +298,6 @@ def extract_audio(video_path, output_path):
         stderr=subprocess.PIPE, 
         check = True
         )
-
-import time
 
 def transcribe_deepgram(wav_path, api_key=None):
     url = "https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true"
