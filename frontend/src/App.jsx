@@ -17,19 +17,21 @@ function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [mutedIndexes, setMutedIndexes] = useState([]);
   const [muteMode, setMuteMode] = useState(false);
+  const [apiKey, setApiKey] = useState("");
 
   const audioRef = useRef(null);
 
   const handleUpload = async () => {
-    if (!file) return;
+    if (!file || loading) return;
     
     setLoading(true);
     setError(null);
     setTranscript(null);
 
     try {
-      const data = await transcribeVideo(file);
+      const data = await transcribeVideo(file, apiKey);
       setTranscript(data.transcript);
+      setFile(null);
       setWordIndexes(data.word_indexes);
       setAudioFile(
         `${import.meta.env.VITE_API_URL}/uploads/${data.audio_file}`
@@ -42,6 +44,8 @@ function App() {
   };
 
   const handleUrlTranscribe = async (url) => {
+      if (loading) return;
+
       if (!url.includes("tiktok.com")) {
           alert("Please enter a valid TikTok URL");
           return;
@@ -50,8 +54,9 @@ function App() {
       try {
           setLoading(true);
           setError(null);
+          setTranscript(null);
 
-          const data = await transcribeUrl(url);
+          const data = await transcribeUrl(url, apiKey);
 
           console.log("URL DATA:", data);
 
@@ -62,7 +67,7 @@ function App() {
 
       } catch (err) {
           console.error(err);
-          alert("URL transcription failed");
+          setError(err.message || "URL transcription failed");
       } finally {
           setLoading(false);
       }
@@ -93,7 +98,11 @@ function App() {
   }, [currentTime, mutedIndexes, transcript]);
 
   const handleExportVideo = async () => {
-    if (!transcript || !file) return;
+    if (!transcript || !audioFile) return;
+
+    const filename = audioFile?.split("/").pop()?.replace(".wav", ".mp4");
+
+    if (!filename) return;
 
     setLoading(true);
 
@@ -107,7 +116,7 @@ function App() {
         method: "POST",
         headers: { "Content-Type": "application/json"},
         body: JSON.stringify({
-          filename: file.name,
+          filename: filename,
           mutes: mutes
         }),
       });
@@ -147,13 +156,24 @@ function App() {
             </p>
           </div>
           
+          <div className="text-center mb-3">
+            <input
+              type="text"
+              placeholder="Optional: Enter Deepgram API Key"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              className="form-control"
+              style={{ maxWidth: "400px", margin: "0 auto" }}
+            />
+          </div>
+
           <div className="card shadow-sm mb-">
             <div className="card-body py-4">
               <FileUpload
                 onFileSelect={setFile}
                 onUpload={handleUpload}
                 loading={loading}
-                disabled={!file}
+                disabled={!file || transcript}
               />
 
               {error && (
@@ -166,7 +186,7 @@ function App() {
           
           <UrlInput
             onSubmit={handleUrlTranscribe}
-            loading={loading}
+            loading={loading || transcript}
           />
 
           <AudioPlayer
@@ -217,6 +237,21 @@ function App() {
               </div>
             </>
           )}
+            {transcript && (
+              <button
+              className="text-center btn btn-secondary mt-3"
+              onClick={() => {
+                setTranscript(null);
+                setFile(null);
+                setAudioFile(null);
+                setError(null);
+                setWordIndexes(null);
+                setMutedIndexes([]);
+              }}
+            >
+              New Transcription
+            </button>
+            )}
 
           {error && <div className="alert alert-danger mt-3">{error}</div>}
         </div>

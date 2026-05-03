@@ -2,18 +2,36 @@ from fastapi import FastAPI, UploadFile, File, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from vosk import Model, KaldiRecognizer
-from pydub import AudioSegment
+from fastapi import Form
 
-import shutil, os, subprocess, wave
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from fastapi.responses import JSONResponse
+from slowapi.middleware import SlowAPIMiddleware
+
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.ssl_ import create_urllib3_context
+
+import shutil, os, subprocess
 import json
 import heapq 
 import re
 import yt_dlp
 import uuid
 
-model = Model("model")
+MAX_DURATION = 120
 
+os.environ['no_proxy'] = '*'
+
+class TLSAdapter(HTTPAdapter):
+    def init_poolmanager(self, *args, **kwargs):
+        context = create_urllib3_context()
+        kwargs['ssl_context'] = context
+        return super().init_poolmanager(*args, **kwargs)
+
+#PUT YOUR KEY HERE
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 UPLOAD_DIR = "uploads"
 DOWNLOAD_DIR = "downloads"
 
@@ -21,6 +39,24 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 app = FastAPI()
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request, exc):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Too many requests. Slow down."}
+    )
+
+def get_ip(request):
+    xff = request.headers.get("X-Forwarded-For")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host
+
+limiter = Limiter(key_func=get_ip)
+app.state.limiter = limiter
+
+app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -48,64 +84,119 @@ def download_tiktok(url):
         "noplaylist": True
     }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.extract_info(url, download=True)
+    with yt_dlp.YoutubeDL({"quiet": True}) as ydl:
+        info = ydl.extract_info(url, download=False)
 
-    return f"{UPLOAD_DIR}/{unique_id}.mp4"
+    duration = info.get("duration")
+
+    if duration and duration > MAX_DURATION:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Video too long ({int(duration)}s). Max is {MAX_DURATION}s"
+        )
+    
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        filename = ydl.prepare_filename(info)
+
+    return filename
 
 @app.post("/transcribe-url")
+@limiter.limit("5/minute")
 async def transcribe_tiktok(payload: dict = Body(...)):
 
     url = payload.get("url")
+    user_api_key = payload.get("api_key")
 
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
 
     try:
         video_path = download_tiktok(url)
-        
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
     filename = os.path.basename(video_path)
+    
+    audio_path = None
 
-    transcript, word_indexes, word_frequencies, audio_filename = process_video(video_path, filename)
+    try:
+        transcript, word_indexes, word_frequencies, audio_filename = process_video(
+            video_path, filename, user_api_key
+        )
+        audio_path = os.path.join(UPLOAD_DIR, audio_filename)
 
-    return {
-        "audio_file": audio_filename,
-        "video_file": filename,
-        "transcript": transcript,
-        "word_indexes": word_indexes,
-        "word_frequencies": word_frequencies
-    }
+        return {
+            "audio_file": audio_filename,
+            "video_file": filename,
+            "transcript": transcript,
+            "word_indexes": word_indexes,
+            "word_frequencies": word_frequencies
+        }
+
+    finally:
+        if os.path.exists(video_path):
+            os.remove(video_path)
+
+        if audio_path and os.path.exists(audio_path):
+            os.remove(audio_path)
 
 @app.post("/transcribe")
-async def transcribe_video(file: UploadFile = File(...)):
-    video_path = os.path.join(UPLOAD_DIR, file.filename)
+@limiter.limit("5/minute")
+async def transcribe_video(file: UploadFile = File(...), api_key: str = Form(None)):
+    safe_name = os.path.basename(file.filename)
+    video_path = os.path.join(UPLOAD_DIR, safe_name)
+
     with open(video_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    
-    transcript, word_indexes, word_frequencies, audio_filename = process_video(video_path, file.filename)
+    audio_path = None
 
-    return {
-        "audio_file": audio_filename,
-        "transcript": transcript,
-        "word_indexes": word_indexes,
-        "word_frequencies": word_frequencies
-        
-    }
+    try:
+        transcript, word_indexes, word_frequencies, audio_filename = process_video(
+            video_path, safe_name, api_key
+        )
+        audio_path = os.path.join(UPLOAD_DIR, audio_filename)
+
+        return {
+            "audio_file": audio_filename,
+            "video_file": safe_name,
+            "transcript": transcript,
+            "word_indexes": word_indexes,
+            "word_frequencies": word_frequencies
+        }
+    
+    finally:
+        if os.path.exists(video_path):
+            os.remove(video_path)
+
+        if audio_path and os.path.exists(audio_path):
+            os.remove(audio_path)
 
 @app.post("/export-video")
 async def export_video(payload: dict = Body(...)):
     filename = payload.get("filename")
+
+    if not filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+
     mutes = payload.get("mutes")
+
+    if mutes and not isinstance(mutes, list):
+        raise HTTPException(status_code=400, detail="Invalid mutes format")
 
     safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', filename)
 
-    video_path = os.path.join(UPLOAD_DIR, filename)
+    safe_input = os.path.basename(filename)
+    video_path = os.path.join(UPLOAD_DIR, safe_input)
+
     output_filename = f"edited_{safe_filename}"
     output_path = os.path.join(DOWNLOAD_DIR, output_filename)
+
+    if not os.path.exists(video_path):
+        raise HTTPException(status_code=404, detail="Video not found")
 
     apply_mute_edits(video_path, output_path, mutes)
 
@@ -113,34 +204,37 @@ async def export_video(payload: dict = Body(...)):
 
 @app.get("/download/{filename}")
 async def download_file(filename: str):
-    file_path = os.path.join(DOWNLOAD_DIR, filename)
+    safe_name = os.path.basename(filename)
+    file_path = os.path.join(DOWNLOAD_DIR, safe_name)
     if os.path.exists(file_path):
         return FileResponse(
             path=file_path,
-            filename=filename,
+            filename=safe_name,
             media_type='application/octet-stream'
         )
     raise HTTPException(status_code=404, detail="File not found")
 
-def process_video(video_path, filename):
+def process_video(video_path, filename, user_api_key=None):
+    duration = get_video_duration(video_path)
 
+    if duration > MAX_DURATION:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Video too long ({int(duration)}s). Max allowed is {MAX_DURATION}s"
+        )
 
     audio_filename = os.path.splitext(filename)[0] + ".wav"
     audio_path = os.path.join(UPLOAD_DIR, audio_filename)
     extract_audio(video_path, audio_path)
 
-    chunks = split_audio(audio_path, chunk_ms=10000)
-
-    transcript = []
-    offset = 0.0
-
-    for chunk_path in chunks:
-        for w in transcribe_vosk(chunk_path):
-            w["start"] += offset
-            w["end"] += offset
-            transcript.append(w)
-        
-        offset += 10.0
+    if user_api_key and user_api_key.strip():
+        transcript = transcribe_deepgram(audio_path, user_api_key)
+    else:
+        transcript = transcribe_vosk_wrapper(audio_path)
+            
+    if not transcript:
+        raise HTTPException(status_code=500, detail="Empty transcript")
+    
 
     word_indexes = {}
     for idx, word_obj in enumerate(transcript):
@@ -155,7 +249,7 @@ def process_video(video_path, filename):
         heapq.heappush(freq, pair)
     
     word_frequencies = []
-    for i in range(10):
+    for i in range(min(10, len(freq))):
         word_frequencies.append(heapq.heappop(freq))
 
     return transcript, word_indexes, word_frequencies, audio_filename
@@ -190,7 +284,7 @@ def extract_audio(video_path, output_path):
         "-i", video_path,
         "-ar", "16000",
         "-ac", "1",
-        "-af", "afftdn",
+        #"-af", "afftdn",
         output_path
     ]
     
@@ -200,6 +294,46 @@ def extract_audio(video_path, output_path):
         stderr=subprocess.PIPE, 
         check = True
         )
+
+import time
+
+def transcribe_deepgram(wav_path, api_key=None):
+    url = "https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true"
+    key_to_use = api_key or DEEPGRAM_API_KEY
+    headers = {
+        "Authorization": f"Token {key_to_use}",
+        "Content-Type": "audio/wav"
+    }
+
+    with open(wav_path, "rb") as f:
+        response = requests.post(url, headers=headers, data=f)
+        #print(response.status_code)
+        #print(response.text)
+
+    if not response.ok:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"Deepgram error: {response.text}"
+        )
+
+    data = response.json()
+
+    words = []
+    for w in data["results"]["channels"][0]["alternatives"][0]["words"]:
+        words.append({
+            "word": w["word"],
+            "start": w["start"],
+            "end": w["end"]
+        })
+
+    return words
+
+
+from vosk import Model, KaldiRecognizer
+from pydub import AudioSegment
+import wave
+
+vosk_model = Model("model")
 
 def split_audio(wav_path, chunk_ms=30000):
     audio = AudioSegment.from_wav(wav_path)
@@ -213,9 +347,30 @@ def split_audio(wav_path, chunk_ms=30000):
     
     return chunks
 
+def transcribe_vosk_wrapper(audio_path):
+    chunks = split_audio(audio_path, chunk_ms=10000)
+
+    transcript = []
+    offset = 0.0
+
+    for chunk_path in chunks:
+        for w in transcribe_vosk(chunk_path):
+            transcript.append({
+                "word": w["word"],
+                "start": w["start"] + offset,
+                "end": w["end"] + offset
+            })
+        offset += 10.0
+
+        if os.path.exists(chunk_path):
+            os.remove(chunk_path)
+
+    return transcript
+
+
 def transcribe_vosk(wav_path):
     wf = wave.open(wav_path, "rb")
-    recognizer = KaldiRecognizer(model, wf.getframerate())
+    recognizer = KaldiRecognizer(vosk_model, wf.getframerate())
     recognizer.SetWords(True)
 
     words_with_timestamps = []
@@ -240,12 +395,39 @@ def transcribe_vosk(wav_path):
     return words_with_timestamps
 
 
+def get_video_duration(video_path):
+    command = [
+        "ffprobe",
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "json",
+        video_path
+    ]
+
+    result = subprocess.run(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+
+    try:
+        data = json.loads(result.stdout)
+        return float(data["format"]["duration"])
+    except:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not read video duration"
+        )
+
 '''
 cd "D:\MJ\Coding\Resume Projects/Tiktok Transcript"
 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 .\venv\Scripts\activate
+
+$env:DEEPGRAM_API_KEY="your_actual_key_here"
 
 python -m uvicorn main:app --reload
 
