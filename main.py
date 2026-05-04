@@ -197,6 +197,7 @@ async def get_job(job_id: str):
 @limiter.limit("5/minute")
 async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
     url = payload.get("url")
+    language = payload.get("language", "multi")
     user_api_key = payload.get("api_key")
 
     if not url:
@@ -219,7 +220,7 @@ async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
 
         try:
             transcript, word_indexes, word_frequencies, audio_filename = process_video(
-                video_path, filename, user_api_key
+                video_path, filename, user_api_key, language
             )
 
             audio_path = os.path.join(UPLOAD_DIR, audio_filename)
@@ -249,7 +250,8 @@ async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
 async def transcribe_video(
     request: Request,
     file: UploadFile = File(...),
-    api_key: str = Form(None)
+    api_key: str = Form(None),
+    language: str = Form("multi")
 ):
     unique_id = str(uuid.uuid4())
     ext = os.path.splitext(file.filename)[1]
@@ -274,7 +276,7 @@ async def transcribe_video(
 
         try:
             transcript, word_indexes, word_frequencies, audio_filename = process_video(
-                video_path, safe_name, api_key
+                video_path, safe_name, api_key, language
             )
 
             audio_path = os.path.join(UPLOAD_DIR, audio_filename)
@@ -340,7 +342,7 @@ async def download_file(filename: str):
 
     raise HTTPException(status_code=404, detail="File not found")
 
-def process_video(video_path, filename, user_api_key=None):
+def process_video(video_path, filename, user_api_key=None, language="multi"):
     duration = get_video_duration(video_path)
 
     if duration > MAX_DURATION:
@@ -354,7 +356,7 @@ def process_video(video_path, filename, user_api_key=None):
     extract_audio(video_path, audio_path)
 
     if user_api_key and user_api_key.strip():
-        transcript = transcribe_deepgram(audio_path, user_api_key)
+        transcript = transcribe_deepgram(audio_path, user_api_key, language)
     else:
         transcript = transcribe_vosk_wrapper(audio_path)
             
@@ -453,12 +455,12 @@ def extract_audio(video_path, output_path):
         check = True
         )
 
-def transcribe_deepgram(wav_path, api_key=None):
+def transcribe_deepgram(wav_path, api_key=None, language="multi"):
     url = (
         "https://api.deepgram.com/v1/listen?"
         "model=nova-2"
         "&smart_format=true"
-        "&language=multi"
+        f"&language={language}"
         "&keywords=tiktok:3"
         "&keywords=facebook:3"
         "&keywords=instagram:3"

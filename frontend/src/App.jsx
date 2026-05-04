@@ -18,6 +18,7 @@ function App() {
   const [mutedIndexes, setMutedIndexes] = useState([]);
   const [muteMode, setMuteMode] = useState(false);
   const [apiKey, setApiKey] = useState("");
+  const [language, setLanguage] = useState("multi");
 
   const audioRef = useRef(null);
 
@@ -30,7 +31,7 @@ function App() {
     setAudioFile(null);
 
     try {
-      const data = await transcribeVideo(file, apiKey);
+      const data = await transcribeVideo(file, apiKey, language);
       setTranscript(data.transcript);
       setFile(null);
       setWordIndexes(data.word_indexes);
@@ -58,7 +59,7 @@ function App() {
           setTranscript(null);
           setAudioFile(null);
 
-          const data = await transcribeUrl(url, apiKey);
+          const data = await transcribeUrl(url, apiKey, language);
 
           console.log("URL DATA:", data);
 
@@ -168,6 +169,35 @@ function App() {
               style={{ maxWidth: "400px", margin: "0 auto" }}
             />
           </div>
+
+          <div className="text-center mb-3">
+            <div className="btn-group">
+              <button
+                className={`btn ${language === "en" ? "btn-primary" : "btn-outline-primary"}`}
+                onClick={() => setLanguage("en")}
+              >
+                English
+              </button>
+
+              <button
+                className={`btn ${language === "tl" ? "btn-primary" : "btn-outline-primary"}`}
+                onClick={() => setLanguage("tl")}
+              >
+                Tagalog
+              </button>
+
+              <button
+                className={`btn ${language === "multi" ? "btn-primary" : "btn-outline-primary"}`}
+                onClick={() => setLanguage("multi")}
+              >
+                None
+              </button>
+            </div>
+          </div>
+
+          <small className="text-warning d-block mt-2">
+            ⚠️ Language selection only applies when using a Deepgram API key
+          </small>
 
           <div className="card shadow-sm mb-">
             <div className="card-body py-4">

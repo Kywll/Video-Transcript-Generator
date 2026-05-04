@@ -52,9 +52,10 @@ async function pollJob(jobId) {
     }
 }
 
-export async function transcribeVideo(file, apiKey) {
+export async function transcribeVideo(file, apiKey, language) {
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("language", language || "multi");
 
     if (apiKey) {
         formData.append("api_key", apiKey);
@@ -82,7 +83,7 @@ export async function transcribeVideo(file, apiKey) {
     return pollJob(job_id);
 }
 
-export async function transcribeUrl(url, apiKey) {
+export async function transcribeUrl(url, apiKey, language) {
     const res = await fetch(
         `${import.meta.env.VITE_API_URL}/transcribe-url`,
         {
@@ -90,7 +91,11 @@ export async function transcribeUrl(url, apiKey) {
             headers: {
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({ url, api_key: apiKey || null  }),
+            body: JSON.stringify({ 
+                url, 
+                api_key: apiKey || null,
+                language: language || "multi"
+            }),
         }
     );
 
