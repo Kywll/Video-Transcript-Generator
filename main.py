@@ -456,9 +456,12 @@ def extract_audio(video_path, output_path):
         )
 
 def transcribe_deepgram(wav_path, api_key=None, language="multi"):
+    
+    model = "nova-3" if language == "tl" else "nova-2"
+
     url = (
         "https://api.deepgram.com/v1/listen?"
-        "model=nova-2"
+        f"model={model}"
         "&smart_format=true"
         f"&language={language}"
         "&keywords=tiktok:3"
