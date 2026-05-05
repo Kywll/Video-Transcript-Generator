@@ -19,16 +19,24 @@ function App() {
   const [muteMode, setMuteMode] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [language, setLanguage] = useState("multi");
+  const [videoFile, setVideoFile] = useState(null);
+  const [urlInput, setUrlInput] = useState("");
 
   const audioRef = useRef(null);
 
   const handleUpload = async () => {
+  
     if (!file || loading) return;
     
     setLoading(true);
     setError(null);
     setTranscript(null);
     setAudioFile(null);
+    setUrlInput("");
+    setVideoFile(null);
+    setMutedIndexes([]);
+    setWordIndexes(null);
+    setCurrentTime(0);
 
     try {
       const data = await transcribeVideo(file, apiKey, language);
@@ -38,6 +46,36 @@ function App() {
       setAudioFile(
         `${import.meta.env.VITE_API_URL}/uploads/${data.audio_file}`
       );
+      setVideoFile(data.video_file);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRawDownload = async () => {
+    if (!urlInput) return;
+
+    try {
+      setLoading(true);
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/download-raw`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url: urlInput }),
+      });
+
+      const data = await res.json();
+
+      if (data.filename) {
+        window.location.href = `${import.meta.env.VITE_API_URL}/download/${data.filename}`;
+      } else {
+        throw new Error("Download failed");
+      }
+
     } catch (err) {
       setError(err.message);
     } finally {
@@ -46,6 +84,7 @@ function App() {
   };
 
   const handleUrlTranscribe = async (url) => {
+
       if (loading) return;
 
       if (!url.includes("tiktok.com")) {
@@ -58,6 +97,11 @@ function App() {
           setError(null);
           setTranscript(null);
           setAudioFile(null);
+          setFile(null);
+          setVideoFile(null);
+          setMutedIndexes([]);
+          setWordIndexes(null);
+          setCurrentTime(0);
 
           const data = await transcribeUrl(url, apiKey, language);
 
@@ -67,6 +111,8 @@ function App() {
           setWordIndexes(data.word_indexes);
 
           setAudioFile(`${import.meta.env.VITE_API_URL}/uploads/${data.audio_file}`);
+          setVideoFile(data.video_file);
+          setUrlInput("");
 
       } catch (err) {
           console.error(err);
@@ -101,11 +147,9 @@ function App() {
   }, [currentTime, mutedIndexes, transcript]);
 
   const handleExportVideo = async () => {
-    if (!transcript || !audioFile) return;
+    if (!transcript || !videoFile) return;
 
-    const filename = audioFile?.split("/").pop()?.replace(".wav", ".mp4");
-
-    if (!filename) return;
+    const filename = videoFile;
 
     setLoading(true);
 
@@ -145,7 +189,7 @@ function App() {
       <div className="row justify-content-center">
         <div className="col-lg-10 col-xl-9">
 
-          <div className="text-center mb-5">
+          <div className="text-center mb-4">
             <h1 className="fw-bold mb-3">
               Video Transcriber & Editing
             </h1>
@@ -168,6 +212,11 @@ function App() {
               className="form-control"
               style={{ maxWidth: "400px", margin: "0 auto" }}
             />
+          </div>
+          <div className="text-center mb-2">
+            <small className="text-warning d-block mt-2">
+              Language selection only applies when using a Deepgram API key
+            </small>
           </div>
 
           <div className="text-center mb-3">
@@ -195,10 +244,6 @@ function App() {
             </div>
           </div>
 
-          <small className="text-warning d-block mt-2">
-            ⚠️ Language selection only applies when using a Deepgram API key
-          </small>
-
           <div className="card shadow-sm mb-">
             <div className="card-body py-4">
               <FileUpload
@@ -218,6 +263,7 @@ function App() {
           
           <UrlInput
             onSubmit={handleUrlTranscribe}
+            onUrlChange={setUrlInput}
             loading={loading || transcript}
           />
 
@@ -263,13 +309,25 @@ function App() {
                 <button
                   className="btn btn-success px-4"
                   onClick={handleExportVideo}
-                  disabled={loading}
+                  disabled={loading || !videoFile}
                 >
                   {loading ? "Processing..." : "Export Edited Video"}
                 </button>
               </div>
             </>
           )}
+            {!transcript && urlInput && !file && (
+              <div className="text-center mt-4">
+                  <button
+                  className="btn btn-outline-success px-4"
+                  onClick={handleRawDownload}
+                  disabled={loading}
+                  >
+                  {loading ? "Downloading..." : "Download Video"}
+                  </button>
+              </div>
+            )}
+
             {transcript && (
               <div className="text-center mt-3">
                 <button
@@ -281,7 +339,7 @@ function App() {
                   setError(null);
                   setWordIndexes(null);
                   setMutedIndexes([]);
-                  
+                  setVideoFile(null);
                 }}
               >
                 New Transcription

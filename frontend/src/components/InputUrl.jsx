@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-function UrlInput({ onSubmit, loading }) {
+function UrlInput({ onSubmit, onUrlChange, loading }) {
     const [url, setUrl] = useState("");
 
     return (
@@ -9,7 +9,11 @@ function UrlInput({ onSubmit, loading }) {
                 type="text"
                 placeholder="Paste TikTok URL..."
                 value={url}
-                onChange={(e) => setUrl(e.target.value)}
+                onChange={(e) => {
+                    const value = e.target.value;
+                    setUrl(value);
+                    onUrlChange?.(value);
+                }}
                 className="form-control mb-2"
                 style={{ maxWidth: "400px", margin: "0 auto" }}
             />

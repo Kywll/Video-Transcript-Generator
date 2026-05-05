@@ -140,10 +140,10 @@ def delete_later(path, delay=900):  # 15 minutes
             os.remove(path)
     threading.Thread(target=_delete, daemon=True).start()
 
-def download_tiktok(url):
+def download_tiktok(url, target_dir):
     unique_id = str(uuid.uuid4())
 
-    output_template = f"{UPLOAD_DIR}/{unique_id}.%(ext)s"
+    output_template = f"{target_dir}/{unique_id}.%(ext)s"
 
     ydl_opts = {
         "outtmpl": output_template,
@@ -162,7 +162,7 @@ def download_tiktok(url):
             status_code=400,
             detail=f"Video too long ({int(duration)}s). Max is {MAX_DURATION}s"
         )
-    
+
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         filename = ydl.prepare_filename(info)
@@ -204,7 +204,7 @@ async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
         raise HTTPException(status_code=400, detail="URL is required")
 
     try:
-        video_path = download_tiktok(url)
+        video_path = download_tiktok(url, UPLOAD_DIR)
     except HTTPException:
         raise
     except Exception as e:
@@ -327,6 +327,26 @@ async def export_video(payload: dict = Body(...)):
     apply_mute_edits(video_path, output_path, mutes)
 
     return {"filename": output_filename}
+
+@app.post("/download-raw")
+async def download_raw(payload: dict = Body(...)):
+    url = payload.get("url")
+
+    if not url:
+        raise HTTPException(status_code=400, detail="URL required")
+
+    try:
+        video_path = download_tiktok(url, DOWNLOAD_DIR)
+        filename = os.path.basename(video_path)
+
+        if video_path and os.path.exists(video_path):
+            delete_later(video_path, delay=900)
+
+        return {"filename": filename}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/download/{filename}")
 async def download_file(filename: str):
@@ -616,8 +636,6 @@ http://localhost:5173/
 
 Ctrl + Shift + P
 Python: Select Interpreter
-
-npm run dev
 
 Python + FastAPI + FFmpeg + Whisper + Vanilla JS
 
