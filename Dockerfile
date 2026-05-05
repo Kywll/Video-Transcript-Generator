@@ -17,7 +17,7 @@ WORKDIR /app
 COPY requirements.txt .
 
 # 🔹 Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && pip install -U yt-dlp
 
 # 🔹 Download Vosk model (small, fast)
 RUN wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip && \
