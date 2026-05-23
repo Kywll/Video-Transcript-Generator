@@ -25,6 +25,8 @@ import yt_dlp
 import uuid
 import queue
 
+from elevenlabs.client import ElevenLabs
+
 TARGET_WORDS = [
     "tiktok", "facebook", "instagram", "messenger",
     "telegram", "whatsapp", "viber", "shopee", "lazada"
@@ -52,6 +54,7 @@ def normalize_word(word):
     return match[0] if match else clean
 
 MAX_DURATION = 120
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 
 os.environ['no_proxy'] = '*'
 
@@ -61,8 +64,6 @@ class TLSAdapter(HTTPAdapter):
         kwargs['ssl_context'] = context
         return super().init_poolmanager(*args, **kwargs)
 
-#PUT YOUR KEY HERE
-DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 UPLOAD_DIR = "uploads"
 DOWNLOAD_DIR = "downloads"
 
@@ -140,10 +141,64 @@ def delete_later(path, delay=900):  # 15 minutes
             os.remove(path)
     threading.Thread(target=_delete, daemon=True).start()
 
-def download_tiktok(url, target_dir):
+def download_tiktok(url, target_dir, rapidapi_key=None):
+
+    if rapidapi_key and rapidapi_key.strip():
+
+        endpoint = (
+            "https://tiktok-api23.p.rapidapi.com/api/download/video"
+        )
+
+        response = requests.get(
+            endpoint,
+            headers={
+                "x-rapidapi-key": rapidapi_key,
+                "x-rapidapi-host": "tiktok-api23.p.rapidapi.com"
+            },
+            params={"url": url},
+            timeout=30
+        )
+
+        data = response.json()
+
+        video_url = (
+            data.get("download_url")
+            or data.get("play")
+        )
+
+        if not video_url:
+            raise HTTPException(
+                status_code=400,
+                detail="RapidAPI could not retrieve video"
+            )
+
+        filename = f"{uuid.uuid4()}.mp4"
+        output_path = os.path.join(
+            target_dir,
+            filename
+        )
+
+        with requests.get(
+            video_url,
+            stream=True
+        ) as r:
+
+            r.raise_for_status()
+
+            with open(output_path, "wb") as f:
+                for chunk in r.iter_content(8192):
+                    if chunk:
+                        f.write(chunk)
+
+        return output_path
+
+    # fallback existing yt-dlp logic
+
     unique_id = str(uuid.uuid4())
 
-    output_template = f"{target_dir}/{unique_id}.%(ext)s"
+    output_template = (
+        f"{target_dir}/{unique_id}.%(ext)s"
+    )
 
     ydl_opts = {
         "outtmpl": output_template,
@@ -153,18 +208,25 @@ def download_tiktok(url, target_dir):
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
+        info = ydl.extract_info(
+            url,
+            download=False
+        )
 
     duration = info.get("duration")
 
     if duration and duration > MAX_DURATION:
         raise HTTPException(
             status_code=400,
-            detail=f"Video too long ({int(duration)}s). Max is {MAX_DURATION}s"
+            detail=f"Video too long ({int(duration)}s)"
         )
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
+        info = ydl.extract_info(
+            url,
+            download=True
+        )
+
         filename = ydl.prepare_filename(info)
 
     return filename
@@ -198,13 +260,18 @@ async def get_job(job_id: str):
 async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
     url = payload.get("url")
     language = payload.get("language", "multi")
-    user_api_key = payload.get("api_key")
+    elevenlabs_api_key = payload.get("elevenlabs_api_key")
+    rapidapi_key = payload.get("rapidapi_key")
 
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
 
     try:
-        video_path = download_tiktok(url, UPLOAD_DIR)
+        video_path = download_tiktok(
+            url,
+            UPLOAD_DIR,
+            rapidapi_key
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -220,7 +287,10 @@ async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
 
         try:
             transcript, word_indexes, word_frequencies, audio_filename = process_video(
-                video_path, filename, user_api_key, language
+                video_path,
+                filename,
+                elevenlabs_api_key,
+                language
             )
 
             audio_path = os.path.join(UPLOAD_DIR, audio_filename)
@@ -250,7 +320,7 @@ async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
 async def transcribe_video(
     request: Request,
     file: UploadFile = File(...),
-    api_key: str = Form(None),
+    elevenlabs_api_key: str = Form(None),
     language: str = Form("multi")
 ):
     unique_id = str(uuid.uuid4())
@@ -276,9 +346,11 @@ async def transcribe_video(
 
         try:
             transcript, word_indexes, word_frequencies, audio_filename = process_video(
-                video_path, safe_name, api_key, language
+                video_path,
+                safe_name,
+                elevenlabs_api_key,
+                language
             )
-
             audio_path = os.path.join(UPLOAD_DIR, audio_filename)
 
             return {
@@ -375,10 +447,21 @@ def process_video(video_path, filename, user_api_key=None, language="multi"):
     audio_path = os.path.join(UPLOAD_DIR, audio_filename)
     extract_audio(video_path, audio_path)
 
-    if user_api_key and user_api_key.strip():
-        transcript = transcribe_deepgram(audio_path, user_api_key, language)
-    else:
-        transcript = transcribe_vosk_wrapper(audio_path)
+    key = (
+        user_api_key
+        or ELEVENLABS_API_KEY
+    )
+
+    if not key:
+        raise HTTPException(
+            status_code=400,
+            detail="ElevenLabs API key required"
+        )
+
+    transcript = transcribe_elevenlabs(
+        audio_path,
+        key
+    )
             
     if not transcript:
         raise HTTPException(status_code=500, detail="Empty transcript")
@@ -475,50 +558,34 @@ def extract_audio(video_path, output_path):
         check = True
         )
 
-def transcribe_deepgram(wav_path, api_key=None, language="multi"):
-    
-    model = "nova-3" if language == "tl" else "nova-2"
-
-    url = (
-        "https://api.deepgram.com/v1/listen?"
-        f"model={model}"
-        "&smart_format=true"
-        f"&language={language}"
-        "&keywords=tiktok:3"
-        "&keywords=facebook:3"
-        "&keywords=instagram:3"
-        "&keywords=messenger:3"
-        "&keywords=telegram:3"
-        "&keywords=whatsapp:3"
-        "&keywords=viber:3"
-        "&keywords=shopee:3"
-        "&keywords=lazada:3"
-        )
-    key_to_use = api_key or DEEPGRAM_API_KEY
-    headers = {
-        "Authorization": f"Token {key_to_use}",
-        "Content-Type": "audio/wav"
-    }
+def transcribe_elevenlabs(
+    wav_path,
+    api_key
+):
+    client = ElevenLabs(
+        api_key=api_key
+    )
 
     with open(wav_path, "rb") as f:
-        response = requests.post(url, headers=headers, data=f, timeout=30)
-        #print(response.status_code)
-        #print(response.text)
 
-    if not response.ok:
-        raise HTTPException(
-            status_code=response.status_code,
-            detail=f"Deepgram error: {response.text}"
+        result = client.speech_to_text.convert(
+            file=f,
+            model_id="scribe_v2",
+            diarize=False,
+            timestamps_granularity="word"
         )
 
-    data = response.json()
-
     words = []
-    for w in data["results"]["channels"][0]["alternatives"][0]["words"]:
+
+    for w in result.words:
+
+        if w.type != "word":
+            continue
+
         words.append({
-            "word": w["word"],
-            "start": w["start"],
-            "end": w["end"]
+            "word": w.text,
+            "start": w.start,
+            "end": w.end
         })
 
     return words
@@ -622,8 +689,6 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 .\venv\Scripts\activate
 
-$env:DEEPGRAM_API_KEY="your_actual_key_here"
-
 python -m uvicorn main:app --reload
 
 http://127.0.0.1:8000
@@ -637,27 +702,7 @@ http://localhost:5173/
 Ctrl + Shift + P
 Python: Select Interpreter
 
-Python + FastAPI + FFmpeg + Whisper + Vanilla JS
-
-
---- MVP GOAL (Reminder) ---
-Paste TikTok URL
-Decode audio
-Transcribe with timestamps
-Build word -> timestamps index
-Search & jump
-Export transcript
-
-
 deactivate
 git rm -r --cached venv
-
-git add main.py templates/index.html static/
-
-git add .
-git commit -m "Notes"
-git push -u origin main
-
-
 
 '''

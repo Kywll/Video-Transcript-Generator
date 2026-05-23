@@ -17,7 +17,8 @@ function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [mutedIndexes, setMutedIndexes] = useState([]);
   const [muteMode, setMuteMode] = useState(false);
-  const [apiKey, setApiKey] = useState("");
+  const [elevenLabsKey, setElevenLabsKey] = useState("");
+  const [rapidApiKey, setRapidApiKey] = useState("");
   const [language, setLanguage] = useState("multi");
   const [videoFile, setVideoFile] = useState(null);
   const [urlInput, setUrlInput] = useState("");
@@ -39,7 +40,11 @@ function App() {
     setCurrentTime(0);
 
     try {
-      const data = await transcribeVideo(file, apiKey, language);
+      const data = await transcribeVideo(
+        file,
+        elevenLabsKey,
+        language
+      );
       setTranscript(data.transcript);
       setFile(null);
       setWordIndexes(data.word_indexes);
@@ -103,7 +108,12 @@ function App() {
           setWordIndexes(null);
           setCurrentTime(0);
 
-          const data = await transcribeUrl(url, apiKey, language);
+          const data = await transcribeUrl(
+            url,
+            elevenLabsKey,
+            rapidApiKey,
+            language
+          );
 
           console.log("URL DATA:", data);
 
@@ -203,46 +213,23 @@ function App() {
             </p>
           </div>
           
-          <div className="text-center mb-3">
-            <input
-              type="text"
-              placeholder="Optional: Enter Deepgram API Key"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              className="form-control"
-              style={{ maxWidth: "400px", margin: "0 auto" }}
-            />
-          </div>
-          <div className="text-center mb-2">
-            <small className="text-warning d-block mt-2">
-              Language selection only applies when using a Deepgram API key
-            </small>
-          </div>
+          <input
+            type="text"
+            placeholder="Optional: Enter ElevenLabs API Key"
+            value={elevenLabsKey}
+            onChange={(e) => setElevenLabsKey(e.target.value)}
+            className="form-control mb-2"
+            style={{ maxWidth: "400px", margin: "0 auto" }}
+          />
 
-          <div className="text-center mb-3">
-            <div className="btn-group">
-              <button
-                className={`btn ${language === "en" ? "btn-primary" : "btn-outline-primary"}`}
-                onClick={() => setLanguage("en")}
-              >
-                English
-              </button>
-
-              <button
-                className={`btn ${language === "tl" ? "btn-primary" : "btn-outline-primary"}`}
-                onClick={() => setLanguage("tl")}
-              >
-                Tagalog
-              </button>
-
-              <button
-                className={`btn ${language === "multi" ? "btn-primary" : "btn-outline-primary"}`}
-                onClick={() => setLanguage("multi")}
-              >
-                None
-              </button>
-            </div>
-          </div>
+          <input
+            type="text"
+            placeholder="Optional: Enter RapidAPI Key (TikTok URLs)"
+            value={rapidApiKey}
+            onChange={(e) => setRapidApiKey(e.target.value)}
+            className="form-control"
+            style={{ maxWidth: "400px", margin: "0 auto" }}
+          />
 
           <div className="card shadow-sm mb-">
             <div className="card-body py-4">

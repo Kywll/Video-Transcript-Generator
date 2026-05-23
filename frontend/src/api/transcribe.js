@@ -58,7 +58,7 @@ export async function transcribeVideo(file, apiKey, language) {
     formData.append("language", language || "multi");
 
     if (apiKey) {
-        formData.append("api_key", apiKey);
+        formData.append("elevenlabs_api_key", apiKey);
     }
 
     const res = await fetch(
@@ -73,7 +73,7 @@ export async function transcribeVideo(file, apiKey, language) {
         const err = await res.json();
 
         if (err.detail?.toLowerCase().includes("auth")) {
-            throw new Error("Invalid Deepgram API key");
+            throw new Error("Invalid ElevenLabs API key");
         }
 
         throw new Error(err.detail || "Upload failed");
@@ -83,7 +83,12 @@ export async function transcribeVideo(file, apiKey, language) {
     return pollJob(job_id);
 }
 
-export async function transcribeUrl(url, apiKey, language) {
+export async function transcribeUrl(
+    url,
+    elevenLabsKey,
+    rapidApiKey,
+    language
+) {
     const res = await fetch(
         `${import.meta.env.VITE_API_URL}/transcribe-url`,
         {
@@ -91,9 +96,10 @@ export async function transcribeUrl(url, apiKey, language) {
             headers: {
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({ 
-                url, 
-                api_key: apiKey || null,
+            body: JSON.stringify({
+                url,
+                elevenlabs_api_key: elevenLabsKey || null,
+                rapidapi_key: rapidApiKey || null,
                 language: language || "multi"
             }),
         }
@@ -108,7 +114,7 @@ export async function transcribeUrl(url, apiKey, language) {
         }
 
         if (err.detail?.toLowerCase().includes("auth")) {
-            throw new Error("Invalid Deepgram API key");
+            throw new Error("Invalid ElevenLabs API key");
         }
 
         throw new Error(err.detail || "Upload failed");
