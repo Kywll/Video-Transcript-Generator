@@ -1,11 +1,14 @@
 import { useState, useRef, useEffect } from "react";
 import { transcribeVideo } from "./api/transcribe";
 import { transcribeUrl } from "./api/transcribe";
+import { supabase } from "./api/supabase";
 
 import FileUpload from "./components/FileUpload";
 import AudioPlayer from "./components/AudioPlayer";
 import Transcript from "./components/Transcript";
 import UrlInput from "./components/InputUrl";
+import LoginButton from "./components/LoginButton";
+import ApiKeyManager from "./components/ApiKeyManager";
 
 function App() {
   const [file, setFile] = useState(null);
@@ -22,6 +25,10 @@ function App() {
   const [language, setLanguage] = useState("multi");
   const [videoFile, setVideoFile] = useState(null);
   const [urlInput, setUrlInput] = useState("");
+
+  const [session, setSession] = useState(null);
+  const [savedElevenLabsKey, setSavedElevenLabsKey] = useState(null);
+  const [savedRapidApiKey, setSavedRapidApiKey] = useState(null);
 
   const audioRef = useRef(null);
 
@@ -156,6 +163,95 @@ function App() {
 
   }, [currentTime, mutedIndexes, transcript]);
 
+  const loadApiKeys = async () => {
+    if (!session) return;
+    try {
+      const token = session.access_token;
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/get-api-keys`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setSavedElevenLabsKey(data.elevenlabs_api_key);
+      setSavedRapidApiKey(data.rapidapi_key);
+      if (data.elevenlabs_api_key) setElevenLabsKey(data.elevenlabs_api_key);
+      if (data.rapidapi_key) setRapidApiKey(data.rapidapi_key);
+    } catch (err) {
+      console.error("Failed to load API keys", err);
+    }
+  };
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    loadApiKeys();
+  }, [session]);
+
+  const saveApiKey = async (keyType, value) => {
+    if (!session) return;
+    try {
+      const token = session.access_token;
+      await fetch(`${import.meta.env.VITE_API_URL}/save-api-keys`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          [keyType]: value,
+          [keyType === "elevenlabs_api_key" ? "rapidapi_key" : "elevenlabs_api_key"]: 
+            keyType === "elevenlabs_api_key" ? savedRapidApiKey : savedElevenLabsKey
+        })
+      });
+      if (keyType === "elevenlabs_api_key") setSavedElevenLabsKey(value);
+      else setSavedRapidApiKey(value);
+    } catch (err) {
+      console.error("Failed to save API key", err);
+    }
+  };
+
+  const deleteApiKey = async (keyType) => {
+    if (!session) return;
+    try {
+      const token = session.access_token;
+      await fetch(`${import.meta.env.VITE_API_URL}/delete-api-key`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ key_type: keyType })
+      });
+      if (keyType === "elevenlabs_api_key") {
+        setSavedElevenLabsKey(null);
+        setElevenLabsKey("");
+      } else {
+        setSavedRapidApiKey(null);
+        setRapidApiKey("");
+      }
+    } catch (err) {
+      console.error("Failed to delete API key", err);
+    }
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+    setSavedElevenLabsKey(null);
+    setSavedRapidApiKey(null);
+    setElevenLabsKey("");
+    setRapidApiKey("");
+  };
+
   const handleExportVideo = async () => {
     if (!transcript || !videoFile) return;
 
@@ -194,12 +290,28 @@ function App() {
   };
 
 
+
+
   return (
     <div className="container py-5">
       <div className="row justify-content-center">
         <div className="col-lg-10 col-xl-9">
 
           <div className="text-center mb-4">
+            <div className="d-flex justify-content-end mb-3">
+              {session ? (
+                <div className="d-flex align-items-center gap-2">
+                  <span className="text-muted">
+                    {session.user.email}
+                  </span>
+                  <button className="btn btn-outline-secondary" onClick={logout}>
+                    Logout
+                  </button>
+                </div>
+              ) : (
+                <LoginButton />
+              )}
+            </div>
             <h1 className="fw-bold mb-3">
               Video Transcriber & Editing
             </h1>
@@ -213,25 +325,32 @@ function App() {
             </p>
           </div>
           
-          <input
-            type="text"
-            placeholder="Optional: Enter ElevenLabs API Key"
-            value={elevenLabsKey}
-            onChange={(e) => setElevenLabsKey(e.target.value)}
-            className="form-control mb-2"
-            style={{ maxWidth: "400px", margin: "0 auto" }}
-          />
+          <div style={{ maxWidth: "500px", margin: "0 auto" }}>
+            <ApiKeyManager
+              label="ElevenLabs API Key"
+              value={elevenLabsKey}
+              onChange={setElevenLabsKey}
+              onSave={() => saveApiKey("elevenlabs_api_key", elevenLabsKey)}
+              onDelete={() => deleteApiKey("elevenlabs_api_key")}
+              saved={!!savedElevenLabsKey}
+            />
+            <ApiKeyManager
+              label="RapidAPI Key (TikTok URLs)"
+              value={rapidApiKey}
+              onChange={setRapidApiKey}
+              onSave={() => saveApiKey("rapidapi_key", rapidApiKey)}
+              onDelete={() => deleteApiKey("rapidapi_key")}
+              saved={!!savedRapidApiKey}
+            />
+          </div>
 
-          <input
-            type="text"
-            placeholder="Optional: Enter RapidAPI Key (TikTok URLs)"
-            value={rapidApiKey}
-            onChange={(e) => setRapidApiKey(e.target.value)}
-            className="form-control"
-            style={{ maxWidth: "400px", margin: "0 auto" }}
+          <UrlInput
+            onSubmit={handleUrlTranscribe}
+            onUrlChange={setUrlInput}
+            loading={loading || transcript}
           />
-
-          <div className="card shadow-sm mb-">
+          
+          <div className="card shadow-sm mt-3">
             <div className="card-body py-4">
               <FileUpload
                 onFileSelect={setFile}
@@ -241,19 +360,13 @@ function App() {
               />
 
               {error && (
-                <div className="alert alert-danger mt-3">
+                <div className="alert alert-danger mt-">
                   {error}
                 </div>
               )}
             </div>
           </div>
-          
-          <UrlInput
-            onSubmit={handleUrlTranscribe}
-            onUrlChange={setUrlInput}
-            loading={loading || transcript}
-          />
-
+        
           <AudioPlayer
             key={audioFile}
             ref={audioRef}
