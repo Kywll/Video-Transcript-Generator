@@ -2,7 +2,16 @@ from vosk import Model, KaldiRecognizer
 from pydub import AudioSegment
 import wave, os, json
 
-vosk_model = Model("model")
+# Lazy-load Vosk model only when needed
+vosk_model = None
+
+def get_vosk_model():
+    global vosk_model
+    if vosk_model is None:
+        # Model is at /app/model (since WORKDIR is /app/backend, go up one directory)
+        model_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "model")
+        vosk_model = Model(model_path)
+    return vosk_model
 
 def split_audio(wav_path, chunk_ms=30000):
     audio = AudioSegment.from_wav(wav_path)
@@ -39,7 +48,7 @@ def transcribe_vosk_wrapper(audio_path):
 
 def transcribe_vosk(wav_path):
     wf = wave.open(wav_path, "rb")
-    recognizer = KaldiRecognizer(vosk_model, wf.getframerate())
+    recognizer = KaldiRecognizer(get_vosk_model(), wf.getframerate())
     recognizer.SetWords(True)
 
     words_with_timestamps = []
