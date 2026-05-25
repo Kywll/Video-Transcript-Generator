@@ -8,9 +8,20 @@ vosk_model = None
 def get_vosk_model():
     global vosk_model
     if vosk_model is None:
-        # Model is at /app/model (since WORKDIR is /app/backend, go up one directory)
-        model_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "model")
-        vosk_model = Model(model_path)
+        # Try possible model paths
+        possible_paths = [
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "model"),  # Local: backend/../model
+            "/app/model",  # Docker: /app/model
+            "model"  # Fallback: current directory
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                print(f"Loading Vosk model from: {path}")
+                vosk_model = Model(path)
+                return vosk_model
+        
+        raise FileNotFoundError(f"Vosk model not found in any of: {possible_paths}")
     return vosk_model
 
 def split_audio(wav_path, chunk_ms=30000):

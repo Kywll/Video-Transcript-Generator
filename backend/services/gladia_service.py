@@ -1,7 +1,10 @@
 import requests
 import os
 import time
+import logging
 from fastapi import HTTPException
+
+logger = logging.getLogger(__name__)
 
 GLADIA_BASE_URL = "https://api.gladia.io"
 GLADIA_API_KEY = os.getenv("GLADIA_API_KEY")
@@ -12,10 +15,13 @@ from utils.normalization import TARGET_WORDS, PHONETIC_MAP
 def transcribe_gladia(audio_path, api_key=None):
     key = api_key or GLADIA_API_KEY
     if not key:
+        logger.warning("No Gladia API key provided")
         raise HTTPException(
             status_code=400,
             detail="Gladia API key required"
         )
+
+    logger.info(f"Starting Gladia transcription for file: {audio_path}")
 
     # Upload the audio file to Gladia
     headers = {
@@ -24,15 +30,19 @@ def transcribe_gladia(audio_path, api_key=None):
     }
 
     filename = os.path.basename(audio_path)
+    logger.info(f"Uploading file {filename} to Gladia...")
     with open(audio_path, "rb") as f:
         files = [("audio", (filename, f, "audio/wav"))]
         upload_response = requests.post(
             f"{GLADIA_BASE_URL}/v2/upload/",
             headers=headers,
-            files=files
+            files=files,
+            timeout=30
         )
 
+    logger.info(f"Gladia upload response status: {upload_response.status_code}")
     if not upload_response.ok:
+        logger.error(f"Gladia upload failed: {upload_response.text}")
         raise HTTPException(
             status_code=upload_response.status_code,
             detail=f"Failed to upload audio to Gladia: {upload_response.text}"
@@ -41,41 +51,16 @@ def transcribe_gladia(audio_path, api_key=None):
     upload_data = upload_response.json()
     audio_url = upload_data.get("audio_url")
     if not audio_url:
+        logger.error(f"No audio_url in Gladia upload response: {upload_data}")
         raise HTTPException(
             status_code=500,
             detail="No audio_url received from Gladia"
         )
+    logger.info(f"Got audio_url from Gladia: {audio_url}")
 
-    # Prepare custom vocabulary from our target words and phonetic map
-    custom_vocabulary = []
-    
-    # Add target words
-    for word in TARGET_WORDS:
-        custom_vocabulary.append({
-            "value": word,
-            "intensity": 0.5,
-            "language": "en"
-        })
-    
-    # Add phonetic map variations
-    for pronunciation, normalized_word in PHONETIC_MAP.items():
-        # Only add if not already added
-        if not any(v["value"] == normalized_word for v in custom_vocabulary):
-            custom_vocabulary.append({
-                "value": normalized_word,
-                "pronunciations": [pronunciation],
-                "intensity": 0.5,
-                "language": "en"
-            })
-
-    # Prepare transcription request
+    # Prepare transcription request (simplified first to test)
     data = {
         "audio_url": audio_url,
-        "custom_vocabulary": True,
-        "custom_vocabulary_config": {
-            "default_intensity": 0.5,
-            "vocabulary": custom_vocabulary
-        },
         "translation": False,
         "custom_spelling": False,
         "language_config": {
