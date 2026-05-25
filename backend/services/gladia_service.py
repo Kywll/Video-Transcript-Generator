@@ -58,9 +58,36 @@ def transcribe_gladia(audio_path, api_key=None):
         )
     logger.info(f"Got audio_url from Gladia: {audio_url}")
 
-    # Prepare transcription request (simplified first to test)
+    # Prepare custom vocabulary from our target words and phonetic map
+    custom_vocabulary = []
+    
+    # Add target words
+    for word in TARGET_WORDS:
+        custom_vocabulary.append({
+            "value": word,
+            "intensity": 0.5,
+            "language": "en"
+        })
+    
+    # Add phonetic map variations
+    for pronunciation, normalized_word in PHONETIC_MAP.items():
+        # Only add if not already added
+        if not any(v["value"] == normalized_word for v in custom_vocabulary):
+            custom_vocabulary.append({
+                "value": normalized_word,
+                "pronunciations": [pronunciation],
+                "intensity": 0.5,
+                "language": "en"
+            })
+
+    # Prepare transcription request
     data = {
         "audio_url": audio_url,
+        "custom_vocabulary": True,
+        "custom_vocabulary_config": {
+            "default_intensity": 0.5,
+            "vocabulary": custom_vocabulary
+        },
         "translation": False,
         "custom_spelling": False,
         "language_config": {
@@ -69,7 +96,7 @@ def transcribe_gladia(audio_path, api_key=None):
         },
         "diarization": False,
         "name_consistency": False,
-        "punctuation_enhanced": False,
+        "punctuation_enhanced": True,
         "sentiment_analysis": True,
         "callback": False
     }

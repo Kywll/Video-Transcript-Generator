@@ -2,7 +2,8 @@ from difflib import get_close_matches
 
 TARGET_WORDS = [
     "tiktok", "facebook", "instagram", "messenger",
-    "telegram", "whatsapp", "viber", "shopee", "lazada"
+    "telegram", "whatsapp", "viber", "shopee", "lazada",
+    "yellow basket"
 ]
 
 PHONETIC_MAP = {
@@ -12,7 +13,11 @@ PHONETIC_MAP = {
     "face book": "facebook",
     "insta gram": "instagram",
     "whats up": "whatsapp",
-    "what's up": "whatsapp"
+    "what's up": "whatsapp",
+    "yellow basket": "yellow basket",
+    "yellow baskets": "yellow basket",
+    "yelow basket": "yellow basket",
+    "yellow baskit": "yellow basket"
 }
 
 def normalize_word(word):
