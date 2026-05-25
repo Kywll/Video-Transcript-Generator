@@ -43,8 +43,6 @@ def get_ip(request):
 limiter = Limiter(key_func=get_ip)
 app.state.limiter = limiter
 
-app.add_middleware(SlowAPIMiddleware)
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -52,6 +50,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+app.add_middleware(SlowAPIMiddleware)
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
