@@ -5,7 +5,6 @@ from fastapi.responses import JSONResponse
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
 import os
-import logging
 
 from config.settings import UPLOAD_DIR, DOWNLOAD_DIR
 from utils.file_utils import ensure_dir_exists
@@ -13,9 +12,6 @@ from routes.profile_routes import router as profile_router
 from routes.transcription_routes import router as transcription_router
 
 os.environ['no_proxy'] = '*'
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 class TLSAdapter(HTTPAdapter):
     def init_poolmanager(self, *args, **kwargs):
@@ -28,23 +24,30 @@ ensure_dir_exists(DOWNLOAD_DIR)
 
 app = FastAPI()
 
-# Log all requests
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    logger.info(f"Incoming request: {request.method} {request.url.path} from {request.client.host}")
-    logger.info(f"Headers: {dict(request.headers)}")
-    response = await call_next(request)
-    logger.info(f"Response status: {response.status_code}")
-    return response
-
 # CORS MIDDLEWARE FIRST - THIS IS CRITICAL!
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://video-transcript-generator.vercel.app",
+        "https://video-transcript-generator-kywlls-projects.vercel.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+# Global OPTIONS handler
+@app.options("{path:path}")
+async def options_handler(request: Request, path: str):
+    response = JSONResponse(content={"success": True}, status_code=200)
+    response.headers["Access-Control-Allow-Origin"] = "https://video-transcript-generator-kywlls-projects.vercel.app"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
+    response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Max-Age"] = "86400"
+    return response
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
