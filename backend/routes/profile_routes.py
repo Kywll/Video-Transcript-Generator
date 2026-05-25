@@ -1,12 +1,26 @@
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 from database.supabase_client import supabase
-from utils.encryption import encrypt_data, decrypt_data
 import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+@router.options("/save-api-keys")
+async def options_save_api_keys(request: Request):
+    logger.info(f"OPTIONS save-api-keys request from: {request.client.host}")
+    return {"success": True}
+
+@router.options("/get-api-keys")
+async def options_get_api_keys(request: Request):
+    logger.info(f"OPTIONS get-api-keys request from: {request.client.host}")
+    return {"success": True}
+
+@router.options("/delete-api-key")
+async def options_delete_api_key(request: Request):
+    logger.info(f"OPTIONS delete-api-key request from: {request.client.host}")
+    return {"success": True}
 
 @router.post("/save-api-keys")
 async def save_api_keys(
@@ -27,8 +41,8 @@ async def save_api_keys(
 
         result = supabase.table("profiles").upsert({
             "id": user_id,
-            "elevenlabs_api_key": encrypt_data(payload.get("elevenlabs_api_key")),
-            "rapidapi_key": encrypt_data(payload.get("rapidapi_key"))
+            "elevenlabs_api_key": payload.get("elevenlabs_api_key"),
+            "rapidapi_key": payload.get("rapidapi_key")
         }).execute()
         logger.info(f"Supabase result: {result}")
     except Exception as e:
@@ -58,8 +72,8 @@ async def get_api_keys(
         logger.info(f"Profile: {profile}")
 
         return {
-            "elevenlabs_api_key": decrypt_data(profile.get("elevenlabs_api_key")) if profile else None,
-            "rapidapi_key": decrypt_data(profile.get("rapidapi_key")) if profile else None
+            "elevenlabs_api_key": profile.get("elevenlabs_api_key") if profile else None,
+            "rapidapi_key": profile.get("rapidapi_key") if profile else None
         }
     except Exception as e:
         logger.error(f"Error getting API keys: {e}")
