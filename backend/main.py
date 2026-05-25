@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 import os
 
 from config.settings import UPLOAD_DIR, DOWNLOAD_DIR
@@ -22,6 +24,10 @@ ensure_dir_exists(UPLOAD_DIR)
 ensure_dir_exists(DOWNLOAD_DIR)
 
 app = FastAPI()
+
+# Add SlowAPI rate limit error handler
+app.state.limiter = None
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS MIDDLEWARE FIRST - QUICK DIAGNOSTIC TEST
 app.add_middleware(
