@@ -3,12 +3,12 @@ from fastapi import APIRouter, UploadFile, File, Body, Request, Form, HTTPExcept
 import os
 import uuid
 import shutil
-from backend.job_queue import JOB_QUEUE, JOB_RESULTS
-from backend.services.download_service import download_tiktok
-from backend.services.transcription_service import process_video
-from backend.services.video_service import apply_mute_edits
-from backend.config.settings import UPLOAD_DIR, DOWNLOAD_DIR, MAX_FILE_SIZE
-from backend.utils.file_utils import delete_later
+from job_queue import JOB_QUEUE, JOB_RESULTS
+from services.download_service import download_tiktok
+from services.transcription_service import process_video
+from services.video_service import apply_mute_edits
+from config.settings import UPLOAD_DIR, DOWNLOAD_DIR, MAX_FILE_SIZE
+from utils.file_utils import delete_later
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 

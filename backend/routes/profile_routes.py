@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Header, HTTPException
-from backend.database.supabase_client import supabase
+from database.supabase_client import supabase
 import logging
 
 logging.basicConfig(level=logging.INFO)

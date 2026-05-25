@@ -5,12 +5,12 @@ import heapq
 from fastapi import HTTPException
 from elevenlabs.client import ElevenLabs
 
-from backend.utils.normalization import (
+from utils.normalization import (
     normalize_word,
     PHONETIC_MAP
 )
 
-from backend.services.video_service import (
+from services.video_service import (
     extract_audio,
     get_video_duration,
     MAX_DURATION
