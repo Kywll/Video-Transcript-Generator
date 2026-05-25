@@ -59,6 +59,10 @@ app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 app.include_router(profile_router)
 app.include_router(transcription_router)
 
+@app.options("{path:path}")
+async def options_handler(path: str):
+    return JSONResponse(status_code=200)
+
 
 
 '''
