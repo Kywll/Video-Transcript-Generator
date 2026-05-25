@@ -20,14 +20,14 @@ function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [mutedIndexes, setMutedIndexes] = useState([]);
   const [muteMode, setMuteMode] = useState(false);
-  const [elevenLabsKey, setElevenLabsKey] = useState("");
+  const [gladiaKey, setGladiaKey] = useState("");
   const [rapidApiKey, setRapidApiKey] = useState("");
   const [language, setLanguage] = useState("multi");
   const [videoFile, setVideoFile] = useState(null);
   const [urlInput, setUrlInput] = useState("");
 
   const [session, setSession] = useState(null);
-  const [savedElevenLabsKey, setSavedElevenLabsKey] = useState(null);
+  const [savedGladiaKey, setSavedGladiaKey] = useState(null);
   const [savedRapidApiKey, setSavedRapidApiKey] = useState(null);
 
   const audioRef = useRef(null);
@@ -49,7 +49,7 @@ function App() {
     try {
       const data = await transcribeVideo(
         file,
-        elevenLabsKey,
+        gladiaKey,
         language
       );
       setTranscript(data.transcript);
@@ -117,7 +117,7 @@ function App() {
 
           const data = await transcribeUrl(
             url,
-            elevenLabsKey,
+            gladiaKey,
             rapidApiKey,
             language
           );
@@ -171,9 +171,9 @@ function App() {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      setSavedElevenLabsKey(data.elevenlabs_api_key);
+      setSavedGladiaKey(data.gladia_api_key);
       setSavedRapidApiKey(data.rapidapi_key);
-      if (data.elevenlabs_api_key) setElevenLabsKey(data.elevenlabs_api_key);
+      if (data.gladia_api_key) setGladiaKey(data.gladia_api_key);
       if (data.rapidapi_key) setRapidApiKey(data.rapidapi_key);
     } catch (err) {
       console.error("Failed to load API keys", err);
@@ -208,11 +208,10 @@ function App() {
         },
         body: JSON.stringify({
           [keyType]: value,
-          [keyType === "elevenlabs_api_key" ? "rapidapi_key" : "elevenlabs_api_key"]: 
-            keyType === "elevenlabs_api_key" ? savedRapidApiKey : savedElevenLabsKey
+          [keyType === "gladia_api_key" ? "rapidapi_key" : "gladia_api_key"]: 
+            keyType === "gladia_api_key" ? savedRapidApiKey : savedGladiaKey
         })
-      });
-      if (keyType === "elevenlabs_api_key") setSavedElevenLabsKey(value);
+      if (keyType === "gladia_api_key") setSavedGladiaKey(value);
       else setSavedRapidApiKey(value);
     } catch (err) {
       console.error("Failed to save API key", err);
@@ -231,9 +230,9 @@ function App() {
         },
         body: JSON.stringify({ key_type: keyType })
       });
-      if (keyType === "elevenlabs_api_key") {
-        setSavedElevenLabsKey(null);
-        setElevenLabsKey("");
+      if (keyType === "gladia_api_key") {
+        setSavedGladiaKey(null);
+        setGladiaKey("");
       } else {
         setSavedRapidApiKey(null);
         setRapidApiKey("");
@@ -246,9 +245,9 @@ function App() {
   const logout = async () => {
     await supabase.auth.signOut();
     setSession(null);
-    setSavedElevenLabsKey(null);
+    setSavedGladiaKey(null);
     setSavedRapidApiKey(null);
-    setElevenLabsKey("");
+    setGladiaKey("");
     setRapidApiKey("");
   };
 
@@ -327,12 +326,12 @@ function App() {
           
           <div style={{ maxWidth: "500px", margin: "0 auto" }}>
             <ApiKeyManager
-              label="ElevenLabs API Key"
-              value={elevenLabsKey}
-              onChange={setElevenLabsKey}
-              onSave={() => saveApiKey("elevenlabs_api_key", elevenLabsKey)}
-              onDelete={() => deleteApiKey("elevenlabs_api_key")}
-              saved={!!savedElevenLabsKey}
+              label="Gladia API Key"
+              value={gladiaKey}
+              onChange={setGladiaKey}
+              onSave={() => saveApiKey("gladia_api_key", gladiaKey)}
+              onDelete={() => deleteApiKey("gladia_api_key")}
+              saved={!!savedGladiaKey}
             />
             <ApiKeyManager
               label="RapidAPI Key (TikTok URLs)"

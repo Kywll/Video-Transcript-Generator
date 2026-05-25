@@ -58,7 +58,7 @@ export async function transcribeVideo(file, apiKey, language) {
     formData.append("language", language || "multi");
 
     if (apiKey) {
-        formData.append("elevenlabs_api_key", apiKey);
+        formData.append("gladia_api_key", apiKey);
     }
 
     const res = await fetch(
@@ -73,7 +73,7 @@ export async function transcribeVideo(file, apiKey, language) {
         const err = await res.json();
 
         if (err.detail?.toLowerCase().includes("auth")) {
-            throw new Error("Invalid ElevenLabs API key");
+            throw new Error("Invalid Gladia API key");
         }
 
         throw new Error(err.detail || "Upload failed");
@@ -85,13 +85,13 @@ export async function transcribeVideo(file, apiKey, language) {
 
 export async function transcribeUrl(
     url,
-    elevenLabsKey,
+    gladiaKey,
     rapidApiKey,
     language
 ) {
     console.log("transcribeUrl called with:", {
         url,
-        elevenLabsKey: elevenLabsKey ? "provided" : "not provided",
+        gladiaKey: gladiaKey ? "provided" : "not provided",
         rapidApiKey: rapidApiKey ? "provided" : "not provided",
         language
     });
@@ -106,7 +106,7 @@ export async function transcribeUrl(
             },
             body: JSON.stringify({
                 url,
-                elevenlabs_api_key: elevenLabsKey || null,
+                gladia_api_key: gladiaKey || null,
                 rapidapi_key: rapidApiKey || null,
                 language: language || "multi"
             }),
@@ -124,7 +124,7 @@ export async function transcribeUrl(
         }
 
         if (err.detail?.toLowerCase().includes("auth")) {
-            throw new Error("Invalid ElevenLabs API key");
+            throw new Error("Invalid Gladia API key");
         }
 
         throw new Error(err.detail || "Upload failed");

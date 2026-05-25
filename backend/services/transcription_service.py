@@ -3,7 +3,6 @@ import uuid
 import heapq 
 
 from fastapi import HTTPException
-from elevenlabs.client import ElevenLabs
 
 from utils.normalization import (
     normalize_word,
@@ -17,42 +16,11 @@ from services.video_service import (
 )
 
 from services.offline_transcription_service import transcribe_vosk_wrapper
+from services.gladia_service import transcribe_gladia
 
 UPLOAD_DIR = "uploads"
 
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-
-def transcribe_elevenlabs(
-    wav_path,
-    api_key
-):
-    client = ElevenLabs(
-        api_key=api_key
-    )
-
-    with open(wav_path, "rb") as f:
-
-        result = client.speech_to_text.convert(
-            file=f,
-            model_id="scribe_v2",
-            diarize=False,
-            timestamps_granularity="word"
-        )
-
-    words = []
-
-    for w in result.words:
-
-        if w.type != "word":
-            continue
-
-        words.append({
-            "word": w.text,
-            "start": w.start,
-            "end": w.end
-        })
-
-    return words
+GLADIA_API_KEY = os.getenv("GLADIA_API_KEY")
 
 def process_video(video_path, filename, user_api_key=None, language="multi"):
     duration = get_video_duration(video_path)
@@ -69,18 +37,18 @@ def process_video(video_path, filename, user_api_key=None, language="multi"):
 
     key = (
         user_api_key
-        or ELEVENLABS_API_KEY
+        or GLADIA_API_KEY
     )
 
     if key:
         try:
-            transcript = transcribe_elevenlabs(
+            transcript = transcribe_gladia(
                 audio_path,
                 key
             )
         except Exception as e:
-            # Fallback to Vosk if ElevenLabs fails
-            print(f"ElevenLabs failed, falling back to Vosk: {e}")
+            # Fallback to Vosk if Gladia fails
+            print(f"Gladia failed, falling back to Vosk: {e}")
             transcript = transcribe_vosk_wrapper(audio_path)
     else:
         # No API key, use Vosk directly

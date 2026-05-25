@@ -27,7 +27,7 @@ async def save_api_keys(
 
         result = supabase.table("profiles").upsert({
             "id": user_id,
-            "elevenlabs_api_key": encrypt_data(payload.get("elevenlabs_api_key")),
+            "gladia_api_key": encrypt_data(payload.get("gladia_api_key")),
             "rapidapi_key": encrypt_data(payload.get("rapidapi_key"))
         }).execute()
         logger.info(f"Supabase result: {result}")
@@ -58,7 +58,7 @@ async def get_api_keys(
         logger.info(f"Profile: {profile}")
 
         return {
-            "elevenlabs_api_key": decrypt_data(profile.get("elevenlabs_api_key")) if profile else None,
+            "gladia_api_key": decrypt_data(profile.get("gladia_api_key")) if profile else None,
             "rapidapi_key": decrypt_data(profile.get("rapidapi_key")) if profile else None
         }
     except Exception as e:
@@ -77,7 +77,7 @@ async def delete_api_key(
     user = supabase.auth.get_user(token)
     user_id = user.user.id
 
-    key_type = payload.get("key_type")  # "elevenlabs_api_key" or "rapidapi_key"
+    key_type = payload.get("key_type")  # "gladia_api_key" or "rapidapi_key"
     if not key_type:
         raise HTTPException(400, detail="key_type is required")
 
