@@ -8,6 +8,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+@router.options("/save-api-keys")
+async def options_save_api_keys():
+    return {"success": True}
+
 @router.post("/save-api-keys")
 async def save_api_keys(
     payload: dict,
@@ -37,6 +41,10 @@ async def save_api_keys(
 
     return {"success": True}
 
+@router.options("/get-api-keys")
+async def options_get_api_keys():
+    return {"success": True}
+
 @router.get("/get-api-keys")
 async def get_api_keys(
     authorization: str = Header(None)
@@ -64,6 +72,10 @@ async def get_api_keys(
     except Exception as e:
         logger.error(f"Error getting API keys: {e}")
         raise HTTPException(500, detail=str(e))
+
+@router.options("/delete-api-key")
+async def options_delete_api_key():
+    return {"success": True}
 
 @router.post("/delete-api-key")
 async def delete_api_key(
