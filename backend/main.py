@@ -5,10 +5,10 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
 import os
 
-from config.settings import UPLOAD_DIR, DOWNLOAD_DIR
-from utils.file_utils import ensure_dir_exists
-from routes.profile_routes import router as profile_router
-from routes.transcription_routes import router as transcription_router
+from backend.config.settings import UPLOAD_DIR, DOWNLOAD_DIR
+from backend.utils.file_utils import ensure_dir_exists
+from backend.routes.profile_routes import router as profile_router
+from backend.routes.transcription_routes import router as transcription_router
 
 os.environ['no_proxy'] = '*'
 
