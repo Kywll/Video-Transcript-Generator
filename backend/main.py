@@ -1,7 +1,6 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
 import os
@@ -24,13 +23,13 @@ ensure_dir_exists(DOWNLOAD_DIR)
 
 app = FastAPI()
 
-# CORS MIDDLEWARE FIRST - THIS IS CRITICAL!
+# CORS MIDDLEWARE FIRST - QUICK DIAGNOSTIC TEST
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origin_regex="https://.*\\.vercel\\.app",
+    allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
@@ -39,6 +38,10 @@ app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 @app.get("/test")
 async def test_endpoint():
     return {"message": "Hello World"}
+
+@app.get("/cors-debug")
+async def cors_debug():
+    return {"version": "test123"}
 
 app.include_router(profile_router)
 app.include_router(transcription_router)
