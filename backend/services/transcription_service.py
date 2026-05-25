@@ -16,6 +16,8 @@ from services.video_service import (
     MAX_DURATION
 )
 
+from services.offline_transcription_service import transcribe_vosk_wrapper
+
 UPLOAD_DIR = "uploads"
 
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
@@ -70,16 +72,19 @@ def process_video(video_path, filename, user_api_key=None, language="multi"):
         or ELEVENLABS_API_KEY
     )
 
-    if not key:
-        raise HTTPException(
-            status_code=400,
-            detail="ElevenLabs API key required"
-        )
-
-    transcript = transcribe_elevenlabs(
-        audio_path,
-        key
-    )
+    if key:
+        try:
+            transcript = transcribe_elevenlabs(
+                audio_path,
+                key
+            )
+        except Exception as e:
+            # Fallback to Vosk if ElevenLabs fails
+            print(f"ElevenLabs failed, falling back to Vosk: {e}")
+            transcript = transcribe_vosk_wrapper(audio_path)
+    else:
+        # No API key, use Vosk directly
+        transcript = transcribe_vosk_wrapper(audio_path)
             
     if not transcript:
         raise HTTPException(status_code=500, detail="Empty transcript")
