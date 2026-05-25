@@ -27,27 +27,11 @@ app = FastAPI()
 # CORS MIDDLEWARE FIRST - THIS IS CRITICAL!
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://video-transcript-generator.vercel.app",
-        "https://video-transcript-generator-kywlls-projects.vercel.app"
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"]
 )
-
-# Global OPTIONS handler
-@app.options("{path:path}")
-async def options_handler(request: Request, path: str):
-    response = JSONResponse(content={"success": True}, status_code=200)
-    response.headers["Access-Control-Allow-Origin"] = "https://video-transcript-generator-kywlls-projects.vercel.app"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
-    response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    response.headers["Access-Control-Max-Age"] = "86400"
-    return response
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
