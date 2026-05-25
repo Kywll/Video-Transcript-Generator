@@ -59,6 +59,10 @@ async def get_job(job_id: str):
 @router.post("/transcribe-url")
 @limiter.limit("5/minute")
 async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("transcribe-url called with payload: %s", payload)
+    
     url = payload.get("url")
     language = payload.get("language", "multi")
     elevenlabs_api_key = payload.get("elevenlabs_api_key")
@@ -68,10 +72,13 @@ async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
         raise HTTPException(status_code=400, detail="URL is required")
 
     try:
+        logger.info("Calling download_tiktok with rapidapi_key: %s", "provided" if rapidapi_key else "not provided")
         video_path = download_tiktok(url, UPLOAD_DIR, rapidapi_key)
+        logger.info("download_tiktok succeeded, video_path: %s", video_path)
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("download_tiktok failed: %s", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
     filename = os.path.basename(video_path)

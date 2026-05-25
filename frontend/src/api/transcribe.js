@@ -89,6 +89,14 @@ export async function transcribeUrl(
     rapidApiKey,
     language
 ) {
+    console.log("transcribeUrl called with:", {
+        url,
+        elevenLabsKey: elevenLabsKey ? "provided" : "not provided",
+        rapidApiKey: rapidApiKey ? "provided" : "not provided",
+        language
+    });
+    console.log("VITE_API_URL:", import.meta.env.VITE_API_URL);
+    
     const res = await fetch(
         `${import.meta.env.VITE_API_URL}/transcribe-url`,
         {
@@ -104,6 +112,8 @@ export async function transcribeUrl(
             }),
         }
     );
+    
+    console.log("transcribeUrl response status:", res.status);
 
     if (!res.ok) {
         let err;
