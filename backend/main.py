@@ -50,6 +50,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "https://video-transcript-generator.vercel.app",
         "https://video-transcript-generator-kywlls-projects.vercel.app"
     ],
     allow_credentials=True,
