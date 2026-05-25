@@ -1,6 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
 import os
@@ -41,6 +42,16 @@ app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 
 app.include_router(profile_router)
 app.include_router(transcription_router)
+
+@app.options("{path:path}")
+async def options_handler(request: Request, path: str):
+    response = JSONResponse(content={"success": True}, status_code=200)
+    response.headers["Access-Control-Allow-Origin"] = "https://video-transcript-generator-kywlls-projects.vercel.app"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
+    response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Max-Age"] = "86400"
+    return response
 
 
 
