@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException
 from database.supabase_client import supabase
 import logging
 
@@ -6,21 +6,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-@router.options("/save-api-keys")
-async def options_save_api_keys(request: Request):
-    logger.info(f"OPTIONS save-api-keys request from: {request.client.host}")
-    return {"success": True}
-
-@router.options("/get-api-keys")
-async def options_get_api_keys(request: Request):
-    logger.info(f"OPTIONS get-api-keys request from: {request.client.host}")
-    return {"success": True}
-
-@router.options("/delete-api-key")
-async def options_delete_api_key(request: Request):
-    logger.info(f"OPTIONS delete-api-key request from: {request.client.host}")
-    return {"success": True}
 
 @router.post("/save-api-keys")
 async def save_api_keys(
