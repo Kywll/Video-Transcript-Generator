@@ -211,6 +211,7 @@ function App() {
           [keyType === "gladia_api_key" ? "rapidapi_key" : "gladia_api_key"]: 
             keyType === "gladia_api_key" ? savedRapidApiKey : savedGladiaKey
         })
+      });
       if (keyType === "gladia_api_key") setSavedGladiaKey(value);
       else setSavedRapidApiKey(value);
     } catch (err) {

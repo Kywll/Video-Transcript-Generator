@@ -75,13 +75,17 @@ def transcribe_gladia(audio_path, api_key=None):
     }
 
     headers["Content-Type"] = "application/json"
+    logger.info("Starting Gladia transcription request...")
     post_response = requests.post(
         f"{GLADIA_BASE_URL}/v2/pre-recorded/",
         headers=headers,
-        json=data
+        json=data,
+        timeout=30
     )
 
+    logger.info(f"Gladia transcription start response status: {post_response.status_code}")
     if not post_response.ok:
+        logger.error(f"Gladia transcription start failed: {post_response.text}")
         raise HTTPException(
             status_code=post_response.status_code,
             detail=f"Failed to start transcription: {post_response.text}"
@@ -90,15 +94,27 @@ def transcribe_gladia(audio_path, api_key=None):
     post_data = post_response.json()
     result_url = post_data.get("result_url")
     if not result_url:
+        logger.error(f"No result_url in Gladia start response: {post_data}")
         raise HTTPException(
             status_code=500,
             detail="No result_url received from Gladia"
         )
+    logger.info(f"Got result_url from Gladia: {result_url}")
 
     # Poll for results
+    logger.info("Polling Gladia for results...")
+    start_poll_time = time.time()
     while True:
-        poll_response = requests.get(result_url, headers=headers)
+        if time.time() - start_poll_time > 300:  # 5 minute timeout
+            logger.error("Gladia polling timed out after 5 minutes")
+            raise HTTPException(
+                status_code=500,
+                detail="Gladia transcription timed out"
+            )
+        
+        poll_response = requests.get(result_url, headers=headers, timeout=10)
         if not poll_response.ok:
+            logger.error(f"Gladia poll failed: {poll_response.text}")
             raise HTTPException(
                 status_code=poll_response.status_code,
                 detail=f"Failed to poll Gladia: {poll_response.text}"
@@ -106,16 +122,19 @@ def transcribe_gladia(audio_path, api_key=None):
         
         poll_data = poll_response.json()
         status = poll_data.get("status")
+        logger.info(f"Gladia poll status: {status}")
         
         if status == "done":
+            logger.info("Gladia transcription completed!")
             break
         elif status == "error":
+            logger.error(f"Gladia transcription failed: {poll_data}")
             raise HTTPException(
                 status_code=500,
                 detail=f"Gladia transcription failed: {poll_data}"
             )
         
-        time.sleep(1)
+        time.sleep(2)
 
     # Extract words from the result
     result = poll_data.get("result", {})
@@ -131,4 +150,5 @@ def transcribe_gladia(audio_path, api_key=None):
                 "end": word_obj.get("end", 0)
             })
     
+    logger.info(f"Extracted {len(words)} words from Gladia transcription")
     return words

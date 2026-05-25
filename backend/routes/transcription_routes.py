@@ -19,7 +19,7 @@ limiter = Limiter(key_func=get_remote_address)
 def create_transcription_job(
     video_path: str,
     video_filename: str,
-    gladia_api_key: str,
+    api_key: str,
     language: str
 ):
     """Create a transcription job function for the queue"""
@@ -29,7 +29,7 @@ def create_transcription_job(
             transcript, word_indexes, word_frequencies, audio_filename = process_video(
                 video_path,
                 video_filename,
-                gladia_api_key,
+                api_key,
                 language
             )
             audio_path = os.path.join(UPLOAD_DIR, audio_filename)
@@ -65,7 +65,8 @@ async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
     
     url = payload.get("url")
     language = payload.get("language", "multi")
-    gladia_api_key = payload.get("gladia_api_key")
+    # Accept both gladia_api_key and elevenlabs_api_key for backward compatibility
+    api_key = payload.get("gladia_api_key") or payload.get("elevenlabs_api_key")
     rapidapi_key = payload.get("rapidapi_key")
 
     if not url:
@@ -84,7 +85,7 @@ async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
     filename = os.path.basename(video_path)
     job_id = str(uuid.uuid4())
     JOB_RESULTS[job_id] = {"status": "queued"}
-    job = create_transcription_job(video_path, filename, gladia_api_key, language)
+    job = create_transcription_job(video_path, filename, api_key, language)
     JOB_QUEUE.put((job_id, job, ()))
 
     return {"job_id": job_id}
@@ -96,6 +97,7 @@ async def transcribe_video(
     request: Request,
     file: UploadFile = File(...),
     gladia_api_key: str = Form(None),
+    elevenlabs_api_key: str = Form(None),
     language: str = Form("multi")
 ):
     unique_id = str(uuid.uuid4())
@@ -113,9 +115,12 @@ async def transcribe_video(
     with open(video_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
+    # Accept both gladia_api_key and elevenlabs_api_key for backward compatibility
+    api_key = gladia_api_key or elevenlabs_api_key
+
     job_id = str(uuid.uuid4())
     JOB_RESULTS[job_id] = {"status": "queued"}
-    job = create_transcription_job(video_path, safe_name, gladia_api_key, language)
+    job = create_transcription_job(video_path, safe_name, api_key, language)
     JOB_QUEUE.put((job_id, job, ()))
 
     return {"job_id": job_id}
