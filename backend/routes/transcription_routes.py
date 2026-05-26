@@ -164,3 +164,18 @@ async def download_file(filename: str):
         media_type="video/mp4",
         content_disposition_type="attachment"
     )
+
+from fastapi.responses import FileResponse
+
+@router.get("/download-file/{filename}")
+async def download_file(filename: str):
+    safe_filename = os.path.basename(filename)
+    file_path = os.path.join(DOWNLOAD_DIR, safe_filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(
+        path=file_path,
+        filename=safe_filename,
+        media_type="video/mp4",
+        content_disposition_type="attachment"
+    )
