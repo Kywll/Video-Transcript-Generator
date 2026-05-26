@@ -31,16 +31,16 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
         try:
             logger.info("Attempting RapidAPI download...")
             endpoint = (
-                "https://tiktok-video-downloader-api.p.rapidapi.com/media"
+                "https://tiktok-api23.p.rapidapi.com/api/download/video"
             )
 
             response = requests.get(
                 endpoint,
                 headers={
                     "x-rapidapi-key": rapidapi_key,
-                    "x-rapidapi-host": "tiktok-video-downloader-api.p.rapidapi.com"
+                    "x-rapidapi-host": "tiktok-api23.p.rapidapi.com"
                 },
-                params={"videoUrl": url},
+                params={"url": url},
                 timeout=30
             )
             logger.info(f"RapidAPI response status: {response.status_code}")
@@ -51,17 +51,13 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
 
             data = response.json()
 
-            # Get video URL from response (check common keys)
             video_url = (
-                data.get("downloadUrl")
-                or data.get("videoUrl")
-                or data.get("url")
-                or data.get("download_url")
+                data.get("download_url")
                 or data.get("play")
             )
 
             if not video_url:
-                raise Exception("RapidAPI response missing video URL")
+                raise Exception("RapidAPI response missing download_url or play")
 
             # Get file extension from video URL
             from urllib.parse import urlparse
