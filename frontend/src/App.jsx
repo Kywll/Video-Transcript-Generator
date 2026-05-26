@@ -289,7 +289,13 @@ function App() {
       const data = await res.json();
 
       if (data.filename) {
-        window.location.href = `${import.meta.env.VITE_API_URL}/download/${data.filename}`;
+        const url = `${import.meta.env.VITE_API_URL}/downloads/${data.filename}`;
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = data.filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
       } else {
         throw new Error("No filename received from server")
       }
