@@ -149,3 +149,18 @@ async def export_video(payload: dict = Body(...)):
 
     apply_mute_edits(video_path, output_path, mutes)
     return {"filename": output_filename}
+
+from fastapi.responses import FileResponse
+
+@router.get("/download-file/{filename}")
+async def download_file(filename: str):
+    safe_filename = os.path.basename(filename)
+    file_path = os.path.join(DOWNLOAD_DIR, safe_filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(
+        path=file_path,
+        filename=safe_filename,
+        media_type="video/mp4",
+        content_disposition_type="attachment"
+    )

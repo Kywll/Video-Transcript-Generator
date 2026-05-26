@@ -86,19 +86,8 @@ function App() {
       const data = await res.json();
 
       if (data.filename) {
-        const url = `${import.meta.env.VITE_API_URL}/downloads/${data.filename}`;
-        // Fetch the file as a blob
-        const response = await fetch(url);
-        const blob = await response.blob();
-        // Create object URL and download
-        const blobUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = data.filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(blobUrl); // Clean up
+        const url = `${import.meta.env.VITE_API_URL}/download-file/${data.filename}`;
+        window.location.href = url;
       } else {
         throw new Error("Download failed");
       }
