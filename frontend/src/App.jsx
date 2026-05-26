@@ -25,6 +25,7 @@ function App() {
   const [language, setLanguage] = useState("multi");
   const [videoFile, setVideoFile] = useState(null);
   const [urlInput, setUrlInput] = useState("");
+  const [exportAvailable, setExportAvailable] = useState(true);
 
   const [session, setSession] = useState(null);
   const [savedGladiaKey, setSavedGladiaKey] = useState(null);
@@ -45,6 +46,7 @@ function App() {
     setMutedIndexes([]);
     setWordIndexes(null);
     setCurrentTime(0);
+    setExportAvailable(true);
 
     try {
       const data = await transcribeVideo(
@@ -59,6 +61,7 @@ function App() {
         `${import.meta.env.VITE_API_URL}/uploads/${data.audio_file}`
       );
       setVideoFile(`${import.meta.env.VITE_API_URL}/uploads/${data.video_file}`);
+      setExportAvailable(data.export_available);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -114,6 +117,7 @@ function App() {
           setMutedIndexes([]);
           setWordIndexes(null);
           setCurrentTime(0);
+          setExportAvailable(true);
 
           const data = await transcribeUrl(
             url,
@@ -129,6 +133,7 @@ function App() {
 
           setAudioFile(`${import.meta.env.VITE_API_URL}/uploads/${data.audio_file}`);
           setVideoFile(`${import.meta.env.VITE_API_URL}/uploads/${data.video_file}`);
+          setExportAvailable(data.export_available);
           setUrlInput("");
 
       } catch (err) {
@@ -253,7 +258,7 @@ function App() {
   };
 
   const handleExportVideo = async () => {
-    if (!transcript || !videoFile) return;
+    if (!transcript || !videoFile || !exportAvailable) return;
 
     // Extract filename from URL (get everything after the last /)
     const filename = videoFile.split("/").pop();
@@ -425,10 +430,15 @@ function App() {
                 <button
                   className="btn btn-success px-4"
                   onClick={handleExportVideo}
-                  disabled={loading || !videoFile}
+                  disabled={loading || !videoFile || !exportAvailable}
                 >
                   {loading ? "Processing..." : "Export Edited Video"}
                 </button>
+                {!exportAvailable && (
+                  <p className="text-danger small mt-2">
+                    ⚠️ Export not available (no video file downloaded)
+                  </p>
+                )}
               </div>
             </>
           )}

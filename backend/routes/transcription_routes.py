@@ -20,7 +20,8 @@ def create_transcription_job(
     video_path: str,
     video_filename: str,
     gladia_api_key: str,
-    language: str
+    language: str,
+    export_available: bool
 ):
     """Create a transcription job function for the queue"""
     def job():
@@ -38,11 +39,12 @@ def create_transcription_job(
                 "video_file": video_filename,
                 "transcript": transcript,
                 "word_indexes": word_indexes,
-                "word_frequencies": word_frequencies
+                "word_frequencies": word_frequencies,
+                "export_available": export_available
             }
         finally:
             if video_path and os.path.exists(video_path):
-                delete_later(video_path, delay=1800)  # Keep for 30 mins to allow export
+                delete_later(video_path, delay=1800)
             if audio_path and os.path.exists(audio_path):
                 delete_later(audio_path, delay=1800)
     return job
@@ -73,8 +75,9 @@ async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
 
     try:
         logger.info("Calling download_tiktok with rapidapi_key: %s", "provided" if rapidapi_key else "not provided")
-        video_path = download_tiktok(url, UPLOAD_DIR, rapidapi_key)
+        video_path, export_available = download_tiktok(url, UPLOAD_DIR, rapidapi_key)
         logger.info("download_tiktok succeeded, video_path: %s", video_path)
+        logger.info("export_available: %s", export_available)
     except HTTPException:
         raise
     except Exception as e:
@@ -84,7 +87,7 @@ async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
     filename = os.path.basename(video_path)
     job_id = str(uuid.uuid4())
     JOB_RESULTS[job_id] = {"status": "queued"}
-    job = create_transcription_job(video_path, filename, gladia_api_key, language)
+    job = create_transcription_job(video_path, filename, gladia_api_key, language, export_available)
     JOB_QUEUE.put((job_id, job, ()))
 
     return {"job_id": job_id}
@@ -113,9 +116,13 @@ async def transcribe_video(
     with open(video_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
+    # Check if uploaded file is a video
+    from services.download_service import is_video_file
+    export_available = is_video_file(video_path)
+
     job_id = str(uuid.uuid4())
     JOB_RESULTS[job_id] = {"status": "queued"}
-    job = create_transcription_job(video_path, safe_name, gladia_api_key, language)
+    job = create_transcription_job(video_path, safe_name, gladia_api_key, language, export_available)
     JOB_QUEUE.put((job_id, job, ()))
 
     return {"job_id": job_id}
@@ -133,6 +140,7 @@ async def export_video(payload: dict = Body(...)):
 
     safe_filename = os.path.basename(filename)
     video_path = os.path.join(UPLOAD_DIR, safe_filename)
+
     output_filename = f"edited_{safe_filename}"
     output_path = os.path.join(DOWNLOAD_DIR, output_filename)
 
@@ -141,33 +149,3 @@ async def export_video(payload: dict = Body(...)):
 
     apply_mute_edits(video_path, output_path, mutes)
     return {"filename": output_filename}
-
-
-@router.post("/download-raw")
-async def download_raw(payload: dict = Body(...)):
-    url = payload.get("url")
-    if not url:
-        raise HTTPException(status_code=400, detail="URL required")
-
-    try:
-        video_path = download_tiktok(url, DOWNLOAD_DIR)
-        filename = os.path.basename(video_path)
-        if video_path and os.path.exists(video_path):
-            delete_later(video_path, delay=900)
-        return {"filename": filename}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/download/{filename}")
-async def download_file(filename: str):
-    from fastapi.responses import FileResponse
-    safe_name = os.path.basename(filename)
-    file_path = os.path.join(DOWNLOAD_DIR, safe_name)
-    if os.path.exists(file_path):
-        return FileResponse(
-            path=file_path,
-            filename=safe_name,
-            media_type='application/octet-stream'
-        )
-    raise HTTPException(status_code=404, detail="File not found")

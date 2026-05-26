@@ -2,12 +2,28 @@ import os, uuid, requests
 import json
 import yt_dlp
 import logging
+import subprocess
 
 from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 
 MAX_DURATION = 120
+
+def is_video_file(file_path):
+    try:
+        check_cmd = [
+            "ffprobe",
+            "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=codec_type",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            file_path
+        ]
+        result = subprocess.run(check_cmd, capture_output=True, text=True)
+        return len(result.stdout.strip()) > 0
+    except:
+        return False
 
 def download_tiktok(url, target_dir, rapidapi_key=None):
 
@@ -66,7 +82,7 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
                         if chunk:
                             f.write(chunk)
             logger.info(f"RapidAPI download succeeded: {output_path}")
-            return output_path
+            return output_path, True  # RapidAPI should always give a video
         except Exception as e:
             logger.warning(f"RapidAPI download failed: {e}, falling back to yt-dlp")
 
@@ -78,11 +94,10 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
         f"{target_dir}/{unique_id}.%(ext)s"
     )
 
-    ydl_opts = {
-        "outtmpl": output_template,
-        "format": "bestvideo+bestaudio/best",
-        "merge_output_format": "mp4",
-        "noplaylist": True
+    ydl_opts = { 
+        "outtmpl": output_template, 
+        "format": "bestvideo+bestaudio/best", 
+        "noplaylist": True 
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -107,4 +122,6 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
 
         filename = ydl.prepare_filename(info)
 
-    return filename
+    # Check if yt-dlp downloaded a video file
+    is_video = is_video_file(filename)
+    return filename, is_video
