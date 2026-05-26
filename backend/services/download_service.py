@@ -2,6 +2,7 @@ import os, uuid, requests
 import json
 import yt_dlp
 import logging
+from urllib.parse import urlparse
 
 from fastapi import HTTPException
 
@@ -43,7 +44,13 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
             if not video_url:
                 raise Exception("RapidAPI response missing download_url or play")
 
-            filename = f"{uuid.uuid4()}.mp4"
+            # Get file extension from video URL
+            parsed_url = urlparse(video_url)
+            path = parsed_url.path
+            ext = os.path.splitext(path)[1]
+            if not ext or len(ext) > 5:
+                ext = ".mp4"  # Fallback to mp4 if no valid extension
+            filename = f"{uuid.uuid4()}{ext}"
             output_path = os.path.join(
                 target_dir,
                 filename
@@ -73,7 +80,8 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
 
     ydl_opts = {
         "outtmpl": output_template,
-        "format": "bestvideo+bestaudio/best",
+        # Force video stream: pick best mp4 video + best audio, or best video + best audio, or best
+        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
         "merge_output_format": "mp4",
         "noplaylist": True
     }
