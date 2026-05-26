@@ -87,12 +87,18 @@ function App() {
 
       if (data.filename) {
         const url = `${import.meta.env.VITE_API_URL}/downloads/${data.filename}`;
+        // Fetch the file as a blob
+        const response = await fetch(url);
+        const blob = await response.blob();
+        // Create object URL and download
+        const blobUrl = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
+        a.href = blobUrl;
         a.download = data.filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+        window.URL.revokeObjectURL(blobUrl); // Clean up
       } else {
         throw new Error("Download failed");
       }
