@@ -58,7 +58,7 @@ function App() {
       setAudioFile(
         `${import.meta.env.VITE_API_URL}/uploads/${data.audio_file}`
       );
-      setVideoFile(data.video_file);
+      setVideoFile(`${import.meta.env.VITE_API_URL}/uploads/${data.video_file}`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -128,7 +128,7 @@ function App() {
           setWordIndexes(data.word_indexes);
 
           setAudioFile(`${import.meta.env.VITE_API_URL}/uploads/${data.audio_file}`);
-          setVideoFile(data.video_file);
+          setVideoFile(`${import.meta.env.VITE_API_URL}/uploads/${data.video_file}`);
           setUrlInput("");
 
       } catch (err) {
@@ -255,7 +255,8 @@ function App() {
   const handleExportVideo = async () => {
     if (!transcript || !videoFile) return;
 
-    const filename = videoFile;
+    // Extract filename from URL (get everything after the last /)
+    const filename = videoFile.split("/").pop();
 
     setLoading(true);
 
@@ -367,12 +368,27 @@ function App() {
             </div>
           </div>
         
-          <AudioPlayer
-            key={audioFile}
-            ref={audioRef}
-            src={audioFile}
-            onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
-          />
+          {/* Video Player */}
+          {videoFile && (
+            <div className="mt-3">
+              <video
+                controls
+                style={{ width: "100%", borderRadius: "8px" }}
+                src={videoFile}
+                onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
+                ref={audioRef}
+              />
+            </div>
+          )}
+          {/* Audio Player (fallback if no video) */}
+          {!videoFile && (
+            <AudioPlayer
+              key={audioFile}
+              ref={audioRef}
+              src={audioFile}
+              onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
+            />
+          )}
 
           {transcript && (
             <>

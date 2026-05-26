@@ -42,7 +42,7 @@ def create_transcription_job(
             }
         finally:
             if video_path and os.path.exists(video_path):
-                delete_later(video_path)
+                delete_later(video_path, delay=1800)  # Keep for 30 mins to allow export
             if audio_path and os.path.exists(audio_path):
                 delete_later(audio_path, delay=1800)
     return job
