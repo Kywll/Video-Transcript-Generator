@@ -2,7 +2,6 @@ import os, uuid, requests
 import json
 import yt_dlp
 import logging
-from urllib.parse import urlparse
 
 from fastapi import HTTPException
 
@@ -45,6 +44,7 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
                 raise Exception("RapidAPI response missing download_url or play")
 
             # Get file extension from video URL
+            from urllib.parse import urlparse
             parsed_url = urlparse(video_url)
             path = parsed_url.path
             ext = os.path.splitext(path)[1]
@@ -80,8 +80,7 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
 
     ydl_opts = {
         "outtmpl": output_template,
-        # Force video stream: must have at least one video track
-        "format": "bestvideo+bestaudio/best[ext=mp4]/best",
+        "format": "bestvideo+bestaudio/best",
         "merge_output_format": "mp4",
         "noplaylist": True
     }
@@ -107,15 +106,5 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
         )
 
         filename = ydl.prepare_filename(info)
-        # Ensure the file has a video extension
-        ext = os.path.splitext(filename)[1].lower()
-        video_exts = ['.mp4', '.mkv', '.webm', '.mov']
-        if ext not in video_exts:
-            # If not, raise an error and try again? Or just return it and let apply_mute_edits handle it
-            logger.warning(f"Downloaded file {filename} is not a video, but proceeding anyway")
 
     return filename
-
-
-
-
