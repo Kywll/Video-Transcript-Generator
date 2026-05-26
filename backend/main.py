@@ -40,6 +40,7 @@ app.add_middleware(
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
+app.mount("/download", StaticFiles(directory=DOWNLOAD_DIR), name="download")
 
 @app.get("/test")
 async def test_endpoint():
