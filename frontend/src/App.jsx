@@ -86,7 +86,7 @@ function App() {
       const data = await res.json();
 
       if (data.filename) {
-        window.location.href = `${import.meta.env.VITE_API_URL}/download/${data.filename}`;
+        window.location.href = `${import.meta.env.VITE_API_URL}/downloads/${data.filename}`;
       } else {
         throw new Error("Download failed");
       }
