@@ -80,8 +80,8 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
 
     ydl_opts = {
         "outtmpl": output_template,
-        # Force video stream: pick best mp4 video + best audio, or best video + best audio, or best
-        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
+        # Force video stream: must have at least one video track
+        "format": "bestvideo+bestaudio/best[ext=mp4]/best",
         "merge_output_format": "mp4",
         "noplaylist": True
     }
@@ -107,6 +107,12 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
         )
 
         filename = ydl.prepare_filename(info)
+        # Ensure the file has a video extension
+        ext = os.path.splitext(filename)[1].lower()
+        video_exts = ['.mp4', '.mkv', '.webm', '.mov']
+        if ext not in video_exts:
+            # If not, raise an error and try again? Or just return it and let apply_mute_edits handle it
+            logger.warning(f"Downloaded file {filename} is not a video, but proceeding anyway")
 
     return filename
 

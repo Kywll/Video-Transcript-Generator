@@ -53,26 +53,45 @@ def apply_mute_edits(input_path, output_path, mutes):
     if not mutes:
         shutil.copy(input_path, output_path)
     else:
+        # First check if input has a video stream
+        check_command = [
+            "ffprobe",
+            "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=codec_type",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            input_path
+        ]
+        check_result = subprocess.run(
+            check_command,
+            capture_output=True,
+            text=True
+        )
+        has_video = len(check_result.stdout.strip()) > 0
+
         filter_parts = []
         for m in mutes:
             s = max(0, m['start'] - 0.1)
             e = max(0, m['end'] - 0.1)
             filter_parts.append(f"volume=enable='between(t,{s},{e})':volume=0")
-        
         audio_filter = ",".join(filter_parts)
 
-        command = [
-            "ffmpeg", "-y",
-            "-i", input_path,
-            "-af", audio_filter,
-            "-c:v", "copy",
-            "-c:a", "aac",
-            output_path
-        ]
+        command = ["ffmpeg", "-y", "-i", input_path, "-af", audio_filter]
+        if has_video:
+            command.extend(["-c:v", "copy"])
+        else:
+            # Add blank black video (640x480, 30fps) if no video
+            command.extend([
+                "-f", "lavfi",
+                "-i", "color=c=black:s=640x480:r=30",
+                "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-shortest"
+            ])
+        command.extend(["-c:a", "aac", output_path])
 
         result = subprocess.run(command, capture_output=True, text=True)
-
         if result.returncode != 0:
-            print(result.stderr)
-            raise HTTPException(status_code=500, detail="Video export failed")
+            print("FFmpeg stderr:", result.stderr)
+            raise HTTPException(status_code=500, detail=f"Video export failed: {result.stderr}")
 
