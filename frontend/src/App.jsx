@@ -26,6 +26,7 @@ function App() {
   const [videoFile, setVideoFile] = useState(null);
   const [urlInput, setUrlInput] = useState("");
   const [exportAvailable, setExportAvailable] = useState(true);
+  const [tiktokMetadata, setTiktokMetadata] = useState(null);
 
   const [session, setSession] = useState(null);
   const [savedGladiaKey, setSavedGladiaKey] = useState(null);
@@ -47,6 +48,7 @@ function App() {
     setWordIndexes(null);
     setCurrentTime(0);
     setExportAvailable(true);
+    setTiktokMetadata(null);
 
     try {
       const data = await transcribeVideo(
@@ -119,6 +121,7 @@ function App() {
           setWordIndexes(null);
           setCurrentTime(0);
           setExportAvailable(true);
+          setTiktokMetadata(null);
 
           const data = await transcribeUrl(
             url,
@@ -131,6 +134,7 @@ function App() {
 
           setTranscript(data.transcript);
           setWordIndexes(data.word_indexes);
+          setTiktokMetadata(data.tiktok_metadata);
 
           setAudioFile(`${import.meta.env.VITE_API_URL}/uploads/${data.audio_file}`);
           setVideoFile(`${import.meta.env.VITE_API_URL}/uploads/${data.video_file}`);
@@ -397,6 +401,20 @@ function App() {
             />
           )}
 
+          {/* TikTok Description Section */}
+          {tiktokMetadata && tiktokMetadata.description && (
+            <div className="mt-3 card shadow-sm p-3">
+              <h5 className="fw-semibold mb-2">Description</h5>
+              <p className="mb-1">{tiktokMetadata.description}</p>
+              <div className="d-flex gap-3 text-muted small mt-2">
+                {tiktokMetadata.play_count > 0 && <span>👁️ {tiktokMetadata.play_count.toLocaleString()} views</span>}
+                {tiktokMetadata.digg_count > 0 && <span>❤️ {tiktokMetadata.digg_count.toLocaleString()} likes</span>}
+                {tiktokMetadata.comment_count > 0 && <span>💬 {tiktokMetadata.comment_count.toLocaleString()} comments</span>}
+                {tiktokMetadata.share_count > 0 && <span>🔗 {tiktokMetadata.share_count.toLocaleString()} shares</span>}
+              </div>
+            </div>
+          )}
+
           {transcript && (
             <>
               {/* MUTE MODE BUTTON */}
@@ -468,6 +486,7 @@ function App() {
                   setWordIndexes(null);
                   setMutedIndexes([]);
                   setVideoFile(null);
+                  setTiktokMetadata(null);
                 }}
               >
                 New Transcription

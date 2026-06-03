@@ -21,7 +21,8 @@ def create_transcription_job(
     video_filename: str,
     gladia_api_key: str,
     language: str,
-    export_available: bool
+    export_available: bool,
+    tiktok_metadata: dict = None
 ):
     """Create a transcription job function for the queue"""
     def job():
@@ -34,7 +35,7 @@ def create_transcription_job(
                 language
             )
             audio_path = os.path.join(UPLOAD_DIR, audio_filename)
-            return {
+            result = {
                 "audio_file": audio_filename,
                 "video_file": video_filename,
                 "transcript": transcript,
@@ -42,6 +43,9 @@ def create_transcription_job(
                 "word_frequencies": word_frequencies,
                 "export_available": export_available
             }
+            if tiktok_metadata:
+                result["tiktok_metadata"] = tiktok_metadata
+            return result
         finally:
             if video_path and os.path.exists(video_path):
                 delete_later(video_path, delay=1800)
@@ -75,9 +79,10 @@ async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
 
     try:
         logger.info("Calling download_tiktok with rapidapi_key: %s", "provided" if rapidapi_key else "not provided")
-        video_path, export_available = download_tiktok(url, UPLOAD_DIR, rapidapi_key)
+        video_path, export_available, tiktok_metadata = download_tiktok(url, UPLOAD_DIR, rapidapi_key)
         logger.info("download_tiktok succeeded, video_path: %s", video_path)
         logger.info("export_available: %s", export_available)
+        logger.info("tiktok_metadata: %s", tiktok_metadata)
     except HTTPException:
         raise
     except Exception as e:
@@ -87,7 +92,7 @@ async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
     filename = os.path.basename(video_path)
     job_id = str(uuid.uuid4())
     JOB_RESULTS[job_id] = {"status": "queued"}
-    job = create_transcription_job(video_path, filename, gladia_api_key, language, export_available)
+    job = create_transcription_job(video_path, filename, gladia_api_key, language, export_available, tiktok_metadata)
     JOB_QUEUE.put((job_id, job, ()))
 
     return {"job_id": job_id}

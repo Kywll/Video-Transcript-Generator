@@ -26,10 +26,61 @@ def is_video_file(file_path):
     except:
         return False
 
-def download_tiktok(url, target_dir, rapidapi_key=None):
+def extract_tiktok_video_id(url):
+    """Extract video ID from TikTok URL (support various formats)"""
+    import re
+    # Patterns like https://www.tiktok.com/@username/video/1234567890123456789, https://vm.tiktok.com/ZMabcde123/, etc.
+    patterns = [
+        r'/video/(\d+)',
+        r'(\d{17,19})'
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    
+    return None
 
+def get_tiktok_post_detail(video_id, rapidapi_key):
+    """Get TikTok post details using RapidAPI"""
+    endpoint = "https://tiktok-api23.p.rapidapi.com/api/post/detail"
+    
+    headers = {
+        "x-rapidapi-key": rapidapi_key,
+        "x-rapidapi-host": "tiktok-api23.p.rapidapi.com",
+        "Content-Type": "application/json"
+    }
+    
+    querystring = {"videoId": video_id}
+    
+    try:
+        response = requests.get(endpoint, headers=headers, params=querystring, timeout=30)
+        if response.ok:
+            data = response.json()
+            aweme_detail = data.get("data", {}).get("aweme_detail", {})
+            return {
+                "description": aweme_detail.get("desc", ""),
+                "play_count": aweme_detail.get("statistics", {}).get("play_count", 0),
+                "digg_count": aweme_detail.get("statistics", {}).get("digg_count", 0),
+                "comment_count": aweme_detail.get("statistics", {}).get("comment_count", 0),
+                "share_count": aweme_detail.get("statistics", {}).get("share_count", 0)
+            }
+    except Exception as e:
+        logger.error(f"Failed to get TikTok post detail: {str(e)}")
+    return None
+
+def download_tiktok(url, target_dir, rapidapi_key=None):
+    tiktok_metadata = None
+    
     if rapidapi_key and rapidapi_key.strip():
         try:
+            # Try to get post detail first
+            video_id = extract_tiktok_video_id(url)
+            if video_id:
+                tiktok_metadata = get_tiktok_post_detail(video_id, rapidapi_key)
+                logger.info(f"Got TikTok metadata: {tiktok_metadata}")
+            
             logger.info("Attempting RapidAPI download...")
             endpoint = (
                 "https://tiktok-api23.p.rapidapi.com/api/download/video"
@@ -91,7 +142,7 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
             if trimmed_path != output_path and os.path.exists(output_path):
                 os.remove(output_path)
                 
-            return trimmed_path, True  # RapidAPI should always give a video
+            return trimmed_path, True, tiktok_metadata  # Return metadata too
         except Exception as e:
             logger.warning(f"RapidAPI download failed: {e}, falling back to yt-dlp")
 
@@ -128,4 +179,4 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
     if trimmed_path != filename and os.path.exists(filename):
         os.remove(filename)
     
-    return trimmed_path, is_video
+    return trimmed_path, is_video, tiktok_metadata
