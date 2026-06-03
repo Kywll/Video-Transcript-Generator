@@ -7,7 +7,7 @@ DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
 
 # File limits
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
-MAX_VIDEO_DURATION = 120  # seconds
+MAX_VIDEO_DURATION = 60  # seconds
 
 # Cleanup delays
 CLEANUP_DELAY_VIDEO = 900  # 15 minutes

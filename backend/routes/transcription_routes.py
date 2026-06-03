@@ -6,7 +6,7 @@ import shutil
 from job_queue import JOB_QUEUE, JOB_RESULTS
 from services.download_service import download_tiktok
 from services.transcription_service import process_video
-from services.video_service import apply_mute_edits
+from services.video_service import apply_mute_edits, trim_video
 from config.settings import UPLOAD_DIR, DOWNLOAD_DIR, MAX_FILE_SIZE
 from utils.file_utils import delete_later
 from slowapi import Limiter
@@ -116,13 +116,23 @@ async def transcribe_video(
     with open(video_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
+    # Trim uploaded video if needed
+    trimmed_video_path = trim_video(video_path, UPLOAD_DIR)
+    
+    # Get final filename
+    final_filename = os.path.basename(trimmed_video_path)
+    
+    # If trimmed, clean up original file
+    if trimmed_video_path != video_path and os.path.exists(video_path):
+        os.remove(video_path)
+
     # Check if uploaded file is a video
     from services.download_service import is_video_file
-    export_available = is_video_file(video_path)
+    export_available = is_video_file(trimmed_video_path)
 
     job_id = str(uuid.uuid4())
     JOB_RESULTS[job_id] = {"status": "queued"}
-    job = create_transcription_job(video_path, safe_name, gladia_api_key, language, export_available)
+    job = create_transcription_job(trimmed_video_path, final_filename, gladia_api_key, language, export_available)
     JOB_QUEUE.put((job_id, job, ()))
 
     return {"job_id": job_id}

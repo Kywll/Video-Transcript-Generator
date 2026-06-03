@@ -12,24 +12,19 @@ from utils.normalization import (
 from services.video_service import (
     extract_audio,
     get_video_duration,
-    MAX_DURATION
 )
+
+from config.settings import MAX_VIDEO_DURATION
 
 from services.offline_transcription_service import transcribe_vosk_wrapper
 from services.gladia_service import transcribe_gladia
 
-UPLOAD_DIR = "uploads"
+from config.settings import UPLOAD_DIR
 
 GLADIA_API_KEY = os.getenv("GLADIA_API_KEY")
 
 def process_video(video_path, filename, user_api_key=None, language="multi"):
     duration = get_video_duration(video_path)
-
-    if duration > MAX_DURATION:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Video too long ({int(duration)}s). Max allowed is {MAX_DURATION}s"
-        )
 
     audio_filename = f"{uuid.uuid4()}.wav"
     audio_path = os.path.join(UPLOAD_DIR, audio_filename)

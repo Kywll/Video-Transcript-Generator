@@ -5,10 +5,11 @@ import logging
 import subprocess
 
 from fastapi import HTTPException
+from config.settings import MAX_VIDEO_DURATION
 
 logger = logging.getLogger(__name__)
 
-MAX_DURATION = 120
+MAX_DURATION = MAX_VIDEO_DURATION
 
 def is_video_file(file_path):
     try:
@@ -82,7 +83,15 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
                         if chunk:
                             f.write(chunk)
             logger.info(f"RapidAPI download succeeded: {output_path}")
-            return output_path, True  # RapidAPI should always give a video
+            
+            # Trim RapidAPI video if needed
+            from services.video_service import trim_video
+            trimmed_path = trim_video(output_path, target_dir)
+            
+            if trimmed_path != output_path and os.path.exists(output_path):
+                os.remove(output_path)
+                
+            return trimmed_path, True  # RapidAPI should always give a video
         except Exception as e:
             logger.warning(f"RapidAPI download failed: {e}, falling back to yt-dlp")
 
@@ -103,20 +112,6 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(
             url,
-            download=False
-        )
-
-    duration = info.get("duration")
-
-    if duration and duration > MAX_DURATION:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Video too long ({int(duration)}s)"
-        )
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(
-            url,
             download=True
         )
 
@@ -124,4 +119,13 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
 
     # Check if yt-dlp downloaded a video file
     is_video = is_video_file(filename)
-    return filename, is_video
+    
+    # Import trim_video here to avoid circular import
+    from services.video_service import trim_video
+    trimmed_path = trim_video(filename, target_dir)
+    
+    # If trimmed, clean up the original file
+    if trimmed_path != filename and os.path.exists(filename):
+        os.remove(filename)
+    
+    return trimmed_path, is_video
