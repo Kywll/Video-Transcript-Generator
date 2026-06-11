@@ -43,7 +43,7 @@ def extract_tiktok_video_id(url):
     return None
 
 def get_tiktok_post_detail(video_id, rapidapi_key):
-    """Get TikTok post details using RapidAPI"""
+    """Get TikTok description using RapidAPI"""
     endpoint = "https://tiktok-api23.p.rapidapi.com/api/post/detail"
     
     headers = {
@@ -55,19 +55,21 @@ def get_tiktok_post_detail(video_id, rapidapi_key):
     querystring = {"videoId": video_id}
     
     try:
+        logger.info(f"Calling RapidAPI post/detail with videoId: {video_id}")
         response = requests.get(endpoint, headers=headers, params=querystring, timeout=30)
+        
         if response.ok:
             data = response.json()
-            aweme_detail = data.get("data", {}).get("aweme_detail", {})
-            return {
-                "description": aweme_detail.get("desc", ""),
-                "play_count": aweme_detail.get("statistics", {}).get("play_count", 0),
-                "digg_count": aweme_detail.get("statistics", {}).get("digg_count", 0),
-                "comment_count": aweme_detail.get("statistics", {}).get("comment_count", 0),
-                "share_count": aweme_detail.get("statistics", {}).get("share_count", 0)
-            }
+            aweme_detail = (
+                data.get("data", {}).get("aweme_detail", {}) or
+                data.get("aweme_detail", {}) or
+                data.get("data", {})
+            )
+            description = aweme_detail.get("desc", "") or aweme_detail.get("description", "")
+            logger.info(f"Extracted TikTok description: {description}")
+            return {"description": description}
     except Exception as e:
-        logger.error(f"Failed to get TikTok post detail: {str(e)}")
+        logger.error(f"Failed to get TikTok post detail: {str(e)}", exc_info=True)
     return None
 
 def download_tiktok(url, target_dir, rapidapi_key=None):

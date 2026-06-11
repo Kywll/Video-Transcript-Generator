@@ -401,17 +401,11 @@ function App() {
             />
           )}
 
-          {/* TikTok Description Section */}
+          {/* TikTok Description Section (Right After Video/Audio Player) */}
           {tiktokMetadata && tiktokMetadata.description && (
             <div className="mt-3 card shadow-sm p-3">
               <h5 className="fw-semibold mb-2">Description</h5>
-              <p className="mb-1">{tiktokMetadata.description}</p>
-              <div className="d-flex gap-3 text-muted small mt-2">
-                {tiktokMetadata.play_count > 0 && <span>👁️ {tiktokMetadata.play_count.toLocaleString()} views</span>}
-                {tiktokMetadata.digg_count > 0 && <span>❤️ {tiktokMetadata.digg_count.toLocaleString()} likes</span>}
-                {tiktokMetadata.comment_count > 0 && <span>💬 {tiktokMetadata.comment_count.toLocaleString()} comments</span>}
-                {tiktokMetadata.share_count > 0 && <span>🔗 {tiktokMetadata.share_count.toLocaleString()} shares</span>}
-              </div>
+              <p className="mb-0">{tiktokMetadata.description}</p>
             </div>
           )}
 
