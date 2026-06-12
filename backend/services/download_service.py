@@ -84,17 +84,32 @@ def get_tiktok_post_detail(video_id, rapidapi_key):
     try:
         logger.info(f"Calling RapidAPI post/detail with videoId: {video_id}")
         response = requests.get(endpoint, headers=headers, params=querystring, timeout=30)
+        logger.info(f"RapidAPI post/detail status: {response.status_code}")
+        logger.info(f"RapidAPI post/detail FULL RESPONSE: {response.text}")
         
         if response.ok:
             data = response.json()
+            logger.info(f"Parsed RapidAPI data: {data}")
+            
             aweme_detail = (
                 data.get("data", {}).get("aweme_detail", {}) or
                 data.get("aweme_detail", {}) or
                 data.get("data", {})
             )
-            description = aweme_detail.get("desc", "") or aweme_detail.get("description", "")
-            logger.info(f"Extracted TikTok description: {description}")
-            return {"description": description}
+            logger.info(f"aweme_detail: {aweme_detail}")
+            
+            description = (
+                aweme_detail.get("desc", "") or
+                aweme_detail.get("description", "") or
+                aweme_detail.get("text", "") or
+                data.get("desc", "") or
+                data.get("description", "") or
+                ""
+            )
+            
+            metadata = {"description": description}
+            logger.info(f"✅ Final extracted TikTok metadata: {metadata}")
+            return metadata
     except Exception as e:
         logger.error(f"Failed to get TikTok post detail: {str(e)}", exc_info=True)
     return None
@@ -106,15 +121,30 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
     url = url.strip()
     logger.info(f"Processing TikTok URL after trimming: {url}")
     
+    # Get TikTok metadata EXCLUSIVELY with yt-dlp (free, no rate limits)
+    tiktok_metadata = {"description": ""}  # Initialize with empty string
+    logger.info("Getting TikTok metadata with yt-dlp...")
+    try:
+        ydl_opts_meta = {
+            "quiet": True,
+            "noplaylist": True
+        }
+        with yt_dlp.YoutubeDL(ydl_opts_meta) as ydl:
+            info = ydl.extract_info(url, download=False)
+            logger.info(f"yt-dlp metadata info: {info}")
+            desc = (
+                info.get("description") or
+                info.get("desc") or
+                info.get("title") or
+                ""
+            )
+            tiktok_metadata["description"] = desc
+            logger.info(f"✅ Final TikTok metadata: {tiktok_metadata}")
+    except Exception as e:
+        logger.warning(f"yt-dlp metadata extraction failed: {str(e)}")
+    
     if rapidapi_key and rapidapi_key.strip():
         try:
-            # Try to get post detail FIRST
-            video_id = extract_tiktok_video_id(url)
-            logger.info(f"Extracted video ID: {video_id}")
-            if video_id:
-                tiktok_metadata = get_tiktok_post_detail(video_id, rapidapi_key)
-                logger.info(f"Got TikTok metadata: {tiktok_metadata}")
-            
             logger.info("Attempting RapidAPI download...")
             endpoint = (
                 "https://tiktok-api23.p.rapidapi.com/api/download/video"
@@ -211,14 +241,20 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
             url,
             download=True
         )
-
+        logger.info(f"yt-dlp FULL info: {info}")
         filename = ydl.prepare_filename(info)
         # Try to get description from yt-dlp info
-        if not tiktok_metadata:
-            desc = info.get("description") or info.get("desc") or ""
+        if not tiktok_metadata or (tiktok_metadata and not tiktok_metadata.get("description")):
+            desc = (
+                info.get("description") or
+                info.get("desc") or
+                info.get("title") or
+                ""
+            )
+            logger.info(f"yt-dlp extracted desc: {desc}")
             if desc:
                 tiktok_metadata = {"description": desc}
-                logger.info(f"Got TikTok description from yt-dlp: {desc}")
+                logger.info(f"✅ Got TikTok description from yt-dlp: {desc}")
 
     # Check if yt-dlp downloaded a video file
     is_video = is_video_file(filename)

@@ -402,10 +402,12 @@ function App() {
           )}
 
           {/* TikTok Description Section (Right After Video/Audio Player) */}
-          {tiktokMetadata && tiktokMetadata.description && (
+          {tiktokMetadata && (
             <div className="mt-3 card shadow-sm p-3">
-              <h5 className="fw-semibold mb-2">Description</h5>
-              <p className="mb-0">{tiktokMetadata.description}</p>
+              <h5 className="fw-semibold mb-2">TikTok Description</h5>
+              <p className="mb-1">
+                {tiktokMetadata.description ? tiktokMetadata.description : "No description found"}
+              </p>
             </div>
           )}
 
