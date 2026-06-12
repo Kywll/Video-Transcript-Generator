@@ -27,19 +27,46 @@ def is_video_file(file_path):
         return False
 
 def extract_tiktok_video_id(url):
-    """Extract video ID from TikTok URL (support various formats)"""
+    """Extract video ID from TikTok URL (support various formats, including short URLs)"""
+    url = url.strip()
     import re
-    # Patterns like https://www.tiktok.com/@username/video/1234567890123456789, https://vm.tiktok.com/ZMabcde123/, etc.
-    patterns = [
-        r'/video/(\d+)',
-        r'(\d{17,19})'
-    ]
     
-    for pattern in patterns:
-        match = re.search(pattern, url)
-        if match:
-            return match.group(1)
+    logger.info(f"Starting video ID extraction from URL: {url}")
     
+    try:
+        # Follow redirects for short URLs (vm.tiktok.com, vt.tiktok.com, etc.)
+        response = requests.head(url, allow_redirects=True, timeout=10)
+        final_url = response.url
+        logger.info(f"Original URL: {url} → Final URL after redirect: {final_url}")
+        
+        # Patterns like https://www.tiktok.com/@username/video/1234567890123456789
+        patterns = [
+            r'/video/(\d+)',
+            r'/(\d{17,19})(?:/?$|\?)'
+        ]
+        
+        # Check both final URL and original URL
+        for check_url in [final_url, url]:
+            logger.info(f"Checking URL for video ID: {check_url}")
+            for pattern in patterns:
+                match = re.search(pattern, check_url)
+                if match:
+                    video_id = match.group(1)
+                    logger.info(f"✅ Extracted video ID: {video_id}")
+                    return video_id
+    except Exception as e:
+        logger.error(f"⚠️ Error extracting video ID from URL {url}: {str(e)}", exc_info=True)
+        # Fallback: try original URL without redirect
+        import re
+        patterns = [r'/video/(\d+)', r'/(\d{17,19})(?:/?$|\?)']
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                video_id = match.group(1)
+                logger.info(f"✅ Fallback extracted video ID: {video_id}")
+                return video_id
+    
+    logger.warning(f"❌ Could not extract video ID from URL: {url}")
     return None
 
 def get_tiktok_post_detail(video_id, rapidapi_key):
@@ -75,10 +102,15 @@ def get_tiktok_post_detail(video_id, rapidapi_key):
 def download_tiktok(url, target_dir, rapidapi_key=None):
     tiktok_metadata = None
     
+    # Trim whitespace from URL
+    url = url.strip()
+    logger.info(f"Processing TikTok URL after trimming: {url}")
+    
     if rapidapi_key and rapidapi_key.strip():
         try:
-            # Try to get post detail first
+            # Try to get post detail FIRST
             video_id = extract_tiktok_video_id(url)
+            logger.info(f"Extracted video ID: {video_id}")
             if video_id:
                 tiktok_metadata = get_tiktok_post_detail(video_id, rapidapi_key)
                 logger.info(f"Got TikTok metadata: {tiktok_metadata}")
@@ -126,6 +158,19 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
                 filename
             )
 
+            # Check download response for any metadata first
+            logger.info(f"RapidAPI download video response: {response.text}")
+            try:
+                download_data = response.json()
+                if not tiktok_metadata:
+                    # Try to extract description from download response too
+                    desc = download_data.get("desc") or download_data.get("description") or ""
+                    if desc:
+                        tiktok_metadata = {"description": desc}
+                        logger.info(f"Got TikTok description from download response: {desc}")
+            except Exception as e:
+                logger.warning(f"Could not parse download response for metadata: {str(e)}")
+            
             with requests.get(
                 video_url,
                 stream=True
@@ -149,7 +194,6 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
             logger.warning(f"RapidAPI download failed: {e}, falling back to yt-dlp")
 
     # fallback existing yt-dlp logic
-
     unique_id = str(uuid.uuid4())
 
     output_template = (
@@ -169,6 +213,12 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
         )
 
         filename = ydl.prepare_filename(info)
+        # Try to get description from yt-dlp info
+        if not tiktok_metadata:
+            desc = info.get("description") or info.get("desc") or ""
+            if desc:
+                tiktok_metadata = {"description": desc}
+                logger.info(f"Got TikTok description from yt-dlp: {desc}")
 
     # Check if yt-dlp downloaded a video file
     is_video = is_video_file(filename)
