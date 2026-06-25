@@ -95,13 +95,18 @@ def get_tiktok_post_detail(video_id, rapidapi_key):
     try:
         logger.info(f"Calling RapidAPI post/detail with videoId: {video_id}")
         response = requests.get(endpoint, headers=headers, params=querystring, timeout=30)
+        print("STATUS:", response.status_code)
+        print("BODY:", repr(response.text))
+        response.raise_for_status()
+        print("About to parse JSON...")
+        data = response.json()
+        print("JSON parsed successfully!")
         logger.info(f"RapidAPI post/detail status: {response.status_code}")
         
         if response.status_code == 204 or not response.text.strip():
             return None
             
         if response.ok:
-            data = response.json()
             logger.info(f"Parsed RapidAPI data: {data}")
             
             aweme_detail = (
@@ -132,25 +137,37 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
     url = clean_url(url)
     logger.info(f"Processing TikTok URL after thorough cleaning: {url}")
     
-    # Get TikTok metadata with yt-dlp first
-    logger.info("Getting TikTok metadata with yt-dlp...")
-    try:
-        ydl_opts_meta = {
-            "quiet": True,
-            "noplaylist": True
-        }
-        with yt_dlp.YoutubeDL(ydl_opts_meta) as ydl:
-            info = ydl.extract_info(url, download=False)
-            desc = (
-                info.get("description") or
-                info.get("desc") or
-                info.get("title") or
-                ""
-            )
-            tiktok_metadata["description"] = desc
-            logger.info(f"✅ Final TikTok metadata: {tiktok_metadata}")
-    except Exception as e:
-        logger.warning(f"yt-dlp metadata extraction failed: {str(e)}")
+    # Get video ID first for RapidAPI post/detail
+    video_id = extract_tiktok_video_id(url)
+    
+    # Get TikTok metadata with RapidAPI first
+    if rapidapi_key and rapidapi_key.strip() and video_id:
+        logger.info("Getting TikTok metadata with RapidAPI first...")
+        rapidapi_metadata = get_tiktok_post_detail(video_id, rapidapi_key)
+        if rapidapi_metadata and rapidapi_metadata.get("description"):
+            tiktok_metadata = rapidapi_metadata
+            logger.info(f"✅ Got TikTok metadata from RapidAPI: {tiktok_metadata}")
+    
+    # If no metadata from RapidAPI, try yt-dlp
+    if not tiktok_metadata or not tiktok_metadata.get("description"):
+        logger.info("Getting TikTok metadata with yt-dlp...")
+        try:
+            ydl_opts_meta = {
+                "quiet": True,
+                "noplaylist": True
+            }
+            with yt_dlp.YoutubeDL(ydl_opts_meta) as ydl:
+                info = ydl.extract_info(url, download=False)
+                desc = (
+                    info.get("description") or
+                    info.get("desc") or
+                    info.get("title") or
+                    ""
+                )
+                tiktok_metadata["description"] = desc
+                logger.info(f"✅ Final TikTok metadata: {tiktok_metadata}")
+        except Exception as e:
+            logger.warning(f"yt-dlp metadata extraction failed: {str(e)}")
     
     # RapidAPI execution route - using EXACT WORKING CODE!
     if rapidapi_key and rapidapi_key.strip():
@@ -175,6 +192,13 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
                 params=querystring,
                 timeout=30
             )
+            
+            print("STATUS:", response.status_code)
+            print("BODY:", repr(response.text))
+            response.raise_for_status()
+            print("About to parse JSON...")
+            data = response.json()
+            print("JSON parsed successfully!")
             
             # LOG EXACT REQUEST URL
             logger.info(f"EXACT RapidAPI request URL: {response.request.url}")
