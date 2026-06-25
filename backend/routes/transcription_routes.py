@@ -79,7 +79,7 @@ async def transcribe_tiktok(request: Request, payload: dict = Body(...)):
 
     try:
         logger.info("Calling download_tiktok with rapidapi_key: %s", "provided" if rapidapi_key else "not provided")
-        video_path, export_available, tiktok_metadata = download_tiktok(url, UPLOAD_DIR, rapidapi_key)
+        video_path, export_available, tiktok_metadata, _ = download_tiktok(url, UPLOAD_DIR, rapidapi_key)
         logger.info("download_tiktok succeeded, video_path: %s", video_path)
         logger.info("export_available: %s", export_available)
         logger.info("tiktok_metadata: %s", tiktok_metadata)
