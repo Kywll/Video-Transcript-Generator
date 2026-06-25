@@ -152,28 +152,50 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
     except Exception as e:
         logger.warning(f"yt-dlp metadata extraction failed: {str(e)}")
     
-    # RapidAPI execution route - using working version!
+    # RapidAPI execution route - using EXACT WORKING CODE!
     if rapidapi_key and rapidapi_key.strip():
         try:
             logger.info("Attempting RapidAPI download...")
+            
+            # VERIFY URL AND KEY FIRST!
+            logger.info(f"RapidAPI key starts with: {repr(rapidapi_key[:10])}")
+            logger.info(f"URL passed to RapidAPI (raw): {repr(url)}")
+            
+            # EXACT WORKING CODE FROM USER'S STANDALONE SCRIPT
             endpoint = "https://tiktok-api23.p.rapidapi.com/api/download/video"
-
+            querystring = {"url": url}
+            headers = {
+                "x-rapidapi-key": rapidapi_key,
+                "x-rapidapi-host": "tiktok-api23.p.rapidapi.com"
+            }
+            
             response = requests.get(
                 endpoint,
-                headers={
-                    "x-rapidapi-key": rapidapi_key,
-                    "x-rapidapi-host": "tiktok-api23.p.rapidapi.com"
-                },
-                params={"url": url},
+                headers=headers,
+                params=querystring,
                 timeout=30
             )
+            
+            # LOG EXACT REQUEST URL
+            logger.info(f"EXACT RapidAPI request URL: {response.request.url}")
+            
             logger.info(f"RapidAPI response status: {response.status_code}")
-            logger.info(f"RapidAPI response text: {response.text}")
+            logger.info(f"RapidAPI response text (raw): {repr(response.text)}")
 
+            # FIRST CHECK FOR 204 No Content
+            if response.status_code == 204:
+                raise Exception("RapidAPI returned 204 No Content - no video found for this URL")
+
+            # THEN CHECK FOR OTHER FAILURES
             if not response.ok:
-                raise Exception(f"RapidAPI request failed with status {response.status_code}")
+                raise Exception(f"RapidAPI request failed ({response.status_code}): {response.text}")
+
+            # CHECK FOR EMPTY RESPONSE BEFORE PARSING
+            if not response.text.strip():
+                raise Exception("RapidAPI returned empty response text")
 
             data = response.json()
+            logger.info(f"RapidAPI parsed data: {data}")
 
             # Use NON-WATERMARKED video ONLY - prioritize "play"
             video_url = data.get("play") or data.get("download_url")
