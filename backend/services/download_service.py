@@ -41,13 +41,7 @@ def clean_url(u):
     return u
 
 def resolve_tiktok_url(url):
-    """
-    Resolve TikTok short URLs (vt.tiktok.com, vm.tiktok.com) to their
-    canonical www.tiktok.com URL.
-
-    Returns:
-        str: Resolved TikTok URL, or None if resolution fails.
-    """
+    """Return the canonical TikTok video URL."""
     url = clean_url(url)
 
     logger.info(f"Resolving TikTok URL: {url}")
@@ -86,109 +80,109 @@ def download_tiktok(url, target_dir, rapidapi_key=None):
     tiktok_metadata = {"description": ""}  # Initialize safely
     original_url = clean_url(url)
     resolved_url = resolve_tiktok_url(original_url)
-    if resolved_url:
-        url = resolved_url
-    logger.info(f"Processing TikTok URL after thorough cleaning: {url}")
+    api_url = resolved_url if resolved_url else original_url
+    logger.info(f"Processing TikTok URL after thorough cleaning: {api_url}")
     
-    # Get TikTok metadata with yt-dlp
-    logger.info("Getting TikTok metadata with yt-dlp...")
-    try:
-        ydl_opts_meta = {
-            "quiet": True,
-            "noplaylist": True
-        }
-        with yt_dlp.YoutubeDL(ydl_opts_meta) as ydl:
-            info = ydl.extract_info(url, download=False)
-            desc = (
-                info.get("description") or
-                info.get("desc") or
-                info.get("title") or
-                ""
-            )
-            tiktok_metadata["description"] = desc
-            logger.info(f"✅ Final TikTok metadata: {tiktok_metadata}")
-    except Exception as e:
-        logger.warning(f"yt-dlp metadata extraction failed: {str(e)}")
-    
-   # RapidAPI execution route - try resolved URL first, then original URL (avoid duplicates)
+    # RapidAPI execution route first
     if rapidapi_key and rapidapi_key.strip():
-        attempt_urls = [url]
-        if original_url != url:
-            attempt_urls.append(original_url)
-        for attempt_url in attempt_urls:
-            try:
-                logger.info(f"Attempting RapidAPI download with URL: {repr(attempt_url)}")
+        try:
+            logger.info(f"Attempting RapidAPI download with URL: {repr(api_url)}")
+            
+            # VERIFY URL AND KEY FIRST!
+            logger.info(f"RapidAPI key starts with: {repr(rapidapi_key[:10])}")
+            
+            # New TikTok Video Downloader API
+            endpoint = "https://tiktok-video-downloader-api.p.rapidapi.com/media"
+            querystring = {"videoUrl": api_url}
+            headers = {
+                "x-rapidapi-key": rapidapi_key,
+                "x-rapidapi-host": "tiktok-video-downloader-api.p.rapidapi.com",
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.get(
+                endpoint,
+                headers=headers,
+                params=querystring,
+                timeout=30
+            )
+            
+            # LOG EXACT REQUEST URL
+            logger.info(f"EXACT RapidAPI request URL: {response.request.url}")
+            
+            logger.info(f"RapidAPI response status: {response.status_code}")
+            logger.info(f"RapidAPI response text (raw): {repr(response.text)}")
+
+            response.raise_for_status()
+            
+            # CHECK FOR EMPTY RESPONSE BEFORE PARSING
+            if not response.text.strip():
+                raise Exception("RapidAPI returned empty response")
+
+            data = response.json()
+            logger.info(f"RapidAPI parsed data: {data}")
+
+            # Get video download URL
+            video_url = data.get("downloadUrl")
+            if not video_url:
+                raise Exception("RapidAPI response missing 'downloadUrl'")
+            
+            # Get description from RapidAPI if available
+            if data.get("description"):
+                tiktok_metadata["description"] = data["description"]
+                logger.info(f"✅ Got TikTok metadata from RapidAPI: {tiktok_metadata}")
+
+            # Get file extension from video URL
+            parsed_url = urlparse(video_url)
+            path = parsed_url.path
+            ext = os.path.splitext(path)[1]
+            if not ext or len(ext) > 5:
+                ext = ".mp4"  # Fallback to mp4 if no valid extension
+            filename = f"{uuid.uuid4()}{ext}"
+            output_path = os.path.join(target_dir, filename)
+            
+            # Download the video with User-Agent header
+            download_headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+            with requests.get(video_url, headers=download_headers, stream=True, timeout=30) as r:
+                r.raise_for_status()
+                with open(output_path, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+            logger.info(f"RapidAPI download succeeded: {output_path}")
+            
+            # Trim RapidAPI video if needed
+            trimmed_path = trim_video(output_path, target_dir)
+            
+            if trimmed_path != output_path and os.path.exists(output_path):
+                os.remove(output_path)
                 
-                # VERIFY URL AND KEY FIRST!
-                logger.info(f"RapidAPI key starts with: {repr(rapidapi_key[:10])}")
-                
-                # EXACT WORKING CODE FROM USER'S STANDALONE SCRIPT
-                endpoint = "https://tiktok-api23.p.rapidapi.com/api/download/video"
-                querystring = {"url": attempt_url}
-                headers = {
-                    "x-rapidapi-key": rapidapi_key,
-                    "x-rapidapi-host": "tiktok-api23.p.rapidapi.com"
-                }
-                
-                response = requests.get(
-                    endpoint,
-                    headers=headers,
-                    params=querystring,
-                    timeout=30
+            return trimmed_path, True, tiktok_metadata, "rapidapi"  # Return metadata and download method
+        except Exception as e:
+            logger.warning(f"RapidAPI download failed: {e}, falling back to yt-dlp")
+    
+    # If no RapidAPI or it failed, get metadata with yt-dlp
+    if not tiktok_metadata.get("description"):
+        logger.info("Getting TikTok metadata with yt-dlp...")
+        try:
+            ydl_opts_meta = {
+                "quiet": True,
+                "noplaylist": True
+            }
+            with yt_dlp.YoutubeDL(ydl_opts_meta) as ydl:
+                info = ydl.extract_info(api_url, download=False)
+                desc = (
+                    info.get("description") or
+                    info.get("desc") or
+                    info.get("title") or
+                    ""
                 )
-                
-                # LOG EXACT REQUEST URL
-                logger.info(f"EXACT RapidAPI request URL: {response.request.url}")
-                
-                logger.info(f"RapidAPI response status: {response.status_code}")
-                logger.info(f"RapidAPI response text (raw): {repr(response.text)}")
-
-                response.raise_for_status()
-                
-                # CHECK FOR EMPTY RESPONSE BEFORE PARSING
-                if not response.text.strip():
-                    raise Exception("RapidAPI returned empty response")
-
-                data = response.json()
-                logger.info(f"RapidAPI parsed data: {data}")
-
-                # Use NON-WATERMARKED video ONLY - prioritize "play"
-                video_url = data.get("play") or data.get("download_url")
-
-                if not video_url:
-                    raise Exception("RapidAPI response missing non-watermarked 'play' or 'download_url'")
-
-                # Get file extension from video URL
-                parsed_url = urlparse(video_url)
-                path = parsed_url.path
-                ext = os.path.splitext(path)[1]
-                if not ext or len(ext) > 5:
-                    ext = ".mp4"  # Fallback to mp4 if no valid extension
-                filename = f"{uuid.uuid4()}{ext}"
-                output_path = os.path.join(target_dir, filename)
-                
-                # Download the video with User-Agent header (as per working example)
-                download_headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                }
-                with requests.get(video_url, headers=download_headers, stream=True, timeout=30) as r:
-                    r.raise_for_status()
-                    with open(output_path, "wb") as f:
-                        for chunk in r.iter_content(chunk_size=8192):
-                            if chunk:
-                                f.write(chunk)
-                logger.info(f"RapidAPI download succeeded: {output_path}")
-                
-                # Trim RapidAPI video if needed
-                trimmed_path = trim_video(output_path, target_dir)
-                
-                if trimmed_path != output_path and os.path.exists(output_path):
-                    os.remove(output_path)
-                    
-                return trimmed_path, True, tiktok_metadata, "rapidapi"  # Return metadata and download method
-            except Exception as e:
-                logger.warning(f"RapidAPI download failed with URL {repr(attempt_url)}: {e}")
-        logger.warning("All RapidAPI attempts failed, falling back to yt-dlp")
+                tiktok_metadata["description"] = desc
+                logger.info(f"✅ Final TikTok metadata: {tiktok_metadata}")
+        except Exception as e:
+            logger.warning(f"yt-dlp metadata extraction failed: {str(e)}")
 
     # Fallback to yt-dlp logic
     unique_id = str(uuid.uuid4())
