@@ -1,9 +1,12 @@
 import shutil, os, subprocess
 import json
 import uuid
+import logging
 
 from fastapi import HTTPException
 from config.settings import MAX_VIDEO_DURATION
+
+logger = logging.getLogger(__name__)
 
 MAX_DURATION = MAX_VIDEO_DURATION
 
@@ -82,42 +85,51 @@ def extract_audio(video_path, output_path):
 def apply_mute_edits(input_path, output_path, mutes):
     if not mutes:
         shutil.copy(input_path, output_path)
+        return
+
+    check_video_cmd = [
+        "ffprobe",
+        "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=codec_type",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        input_path
+    ]
+    check_result = subprocess.run(check_video_cmd, capture_output=True, text=True)
+    has_video = len(check_result.stdout.strip()) > 0
+
+    filter_parts = []
+    for m in mutes:
+        s = max(0, m['start'] - 0.1)
+        e = max(0, m['end'] - 0.1)
+        filter_parts.append(f"volume=enable='between(t,{s},{e})':volume=0")
+
+    audio_filter = ",".join(filter_parts)
+
+    command = [
+        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+        "-threads", "2",
+        "-i", input_path,
+        "-af", audio_filter
+    ]
+    if has_video:
+        command.extend(["-c:v", "copy"])
     else:
-        # Check if input has video stream
-        check_video_cmd = [
-            "ffprobe",
-            "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=codec_type",
-            "-of", "default=noprint_wrappers=1:nokey=1",
-            input_path
-        ]
-        check_result = subprocess.run(check_video_cmd, capture_output=True, text=True)
-        has_video = len(check_result.stdout.strip()) > 0
+        command.extend([
+            "-f", "lavfi",
+            "-i", "color=c=black:s=640x480:r=30",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "28",
+            "-pix_fmt", "yuv420p", "-shortest"
+        ])
+    command.extend(["-c:a", "aac", "-profile:a", "aac_low", "-b:a", "128k", output_path])
 
-        filter_parts = []
-        for m in mutes:
-            s = max(0, m['start'] - 0.1)
-            e = max(0, m['end'] - 0.1)
-            filter_parts.append(f"volume=enable='between(t,{s},{e})':volume=0")
-        
-        audio_filter = ",".join(filter_parts)
-
-        command = ["ffmpeg", "-y", "-i", input_path, "-af", audio_filter]
-        if has_video:
-            command.extend(["-c:v", "copy"])
-        else:
-            # Add blank black video (640x480, 30fps) if no video
-            command.extend([
-                "-f", "lavfi",
-                "-i", "color=c=black:s=640x480:r=30",
-                "-c:v", "libx264",
-                "-pix_fmt", "yuv420p",
-                "-shortest"
-            ])
-        command.extend(["-c:a", "aac", output_path])
-
-        result = subprocess.run(command, capture_output=True, text=True)
-        if result.returncode != 0:
-            print("FFmpeg stderr:", result.stderr)
-            raise HTTPException(status_code=500, detail=f"Video export failed: {result.stderr}")
+    with open(os.devnull, "wb") as devnull:
+        result = subprocess.run(
+            command,
+            stdout=devnull,
+            stderr=subprocess.PIPE
+        )
+    if result.returncode != 0:
+        err = result.stderr.decode("utf-8", "ignore")
+        logger.error("FFmpeg export failed: %s", err)
+        raise HTTPException(status_code=500, detail="Video export failed")

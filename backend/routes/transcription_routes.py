@@ -143,6 +143,14 @@ async def transcribe_video(
     return {"job_id": job_id}
 
 
+def create_export_job(video_path, output_path, mutes):
+    """Create a video export job function for the queue"""
+    def job():
+        apply_mute_edits(video_path, output_path, mutes)
+        return {"output_path": output_path}
+    return job
+
+
 @router.post("/export-video")
 async def export_video(payload: dict = Body(...)):
     filename = payload.get("filename")
@@ -162,23 +170,11 @@ async def export_video(payload: dict = Body(...)):
     if not os.path.exists(video_path):
         raise HTTPException(status_code=404, detail="Video not found")
 
-    apply_mute_edits(video_path, output_path, mutes)
-    return {"filename": output_filename}
-
-from fastapi.responses import FileResponse
-
-@router.get("/download-file/{filename}")
-async def download_file(filename: str):
-    safe_filename = os.path.basename(filename)
-    file_path = os.path.join(DOWNLOAD_DIR, safe_filename)
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(
-        path=file_path,
-        filename=safe_filename,
-        media_type="video/mp4",
-        content_disposition_type="attachment"
-    )
+    job_id = str(uuid.uuid4())
+    JOB_RESULTS[job_id] = {"status": "queued"}
+    job = create_export_job(video_path, output_path, mutes)
+    JOB_QUEUE.put((job_id, job, ()))
+    return {"job_id": job_id, "output_filename": output_filename}
 
 from fastapi.responses import FileResponse
 

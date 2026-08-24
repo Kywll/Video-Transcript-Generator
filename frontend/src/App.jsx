@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { transcribeVideo } from "./api/transcribe";
-import { transcribeUrl } from "./api/transcribe";
+import { transcribeVideo, transcribeUrl, pollJob } from "./api/transcribe";
 import { supabase } from "./api/supabase";
 
 import FileUpload from "./components/FileUpload";
@@ -265,7 +264,6 @@ function App() {
   const handleExportVideo = async () => {
     if (!transcript || !videoFile || !exportAvailable) return;
 
-    // Extract filename from URL (get everything after the last /)
     const filename = videoFile.split("/").pop();
 
     setLoading(true);
@@ -285,14 +283,20 @@ function App() {
         }),
       });
 
-      const data = await res.json();
-
-      if (data.filename) {
-        const url = `${import.meta.env.VITE_API_URL}/download-file/${data.filename}`;
-        window.location.href = url;
-      } else {
-        throw new Error("No filename received from server")
+      if (!res.ok) {
+        let errDetail = "Export failed";
+        try {
+          const errJson = await res.json();
+          if (errJson?.detail) errDetail = errJson.detail;
+        } catch {}
+        throw new Error(errDetail);
       }
+
+      const { job_id, output_filename } = await res.json();
+      await pollJob(job_id);
+
+      const url = `${import.meta.env.VITE_API_URL}/download-file/${output_filename}`;
+      window.location.href = url;
 
     } catch (err) {
       setError("Export failed: " + err.message);

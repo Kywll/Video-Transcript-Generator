@@ -1,4 +1,4 @@
-async function pollJob(jobId) {
+export async function pollJob(jobId) {
     const base = import.meta.env.VITE_API_URL;
 
     const start = Date.now();
